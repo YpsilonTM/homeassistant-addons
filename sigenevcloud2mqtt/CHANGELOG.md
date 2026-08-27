@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- Fix add-on crash: `run.sh` had Windows CRLF line endings (`bash\r` in container)
+
 ## 0.2.4
 
 - Fix phase mode writes: cloud `outputMode` is 0=1-phase, 1=3-phase (not 1/2)

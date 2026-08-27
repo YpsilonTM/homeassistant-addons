@@ -1,0 +1,4 @@
+# Home Assistant add-on scripts run on Linux; CRLF breaks shebangs in containers.
+*.sh text eol=lf
+run.sh text eol=lf
+Dockerfile text eol=lf
