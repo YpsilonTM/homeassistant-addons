@@ -1,0 +1,13 @@
+# Dev / local files
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+*.md
+config_local/
+tests/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+pyproject.toml

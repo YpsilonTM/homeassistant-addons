@@ -1,26 +1,33 @@
-# Ignore real config, keep example (addon-root layout)
+# Local add-on configuration (keep *.example.* in git)
 modqtt/modqtt.yaml
+modqtt/config_local/modqtt.yaml
+!modqtt/config_local/modqtt.example.yml
 !modqtt/modqtt.example.yml
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-# VSCode
-.vscode/
-# Test output
+.pytest_cache/
+.ruff_cache/
 htmlcov/
 .coverage
 .cache/
-# OS
+**/.venv/
+
+# Node / Bun (per add-on only; never commit root node_modules)
+node_modules/
+
+# Environment and secrets
+.env
+.env.local
+
+# Editor / OS
+.vscode/
 .DS_Store
 Thumbs.db
+
+# Local-only paths
 extra/
-# Extra
 /datasheets/
-# Bun
-node_modules/
-# Environment variables
-.env
-# Local Python venvs
-**/.venv/

@@ -1,26 +1,29 @@
 # Home Assistant Add-ons
 
-This repository hosts Home Assistant add-ons maintained by YpsilonTM.
+Community add-on repository for [Home Assistant](https://www.home-assistant.io/) Supervisor.
 
-It is structured to support multiple add-ons over time.
+Add this URL under **Settings → Add-ons → Add-on store → ⋮ → Repositories**:
 
-## Available add-ons
-
-### ModQTT
-
-General-purpose Modbus TCP to MQTT bridge for Home Assistant.
-
-- Add-on docs and intro: [modqtt/DOCS.md](modqtt/DOCS.md)
-
-### Sigen EV Cloud to MQTT
-
-Sigenergy cloud bridge for Sigen EV AC (MQTT + HA discovery): current, start/stop, telemetry, and phase mode synced with mySigen — intended to replace `ocppsigen2mqtt`.
-
-- Add-on docs: [sigenevcloud2mqtt/DOCS.md](sigenevcloud2mqtt/DOCS.md)
-- Plan: [PLAN-sigenevcloud2mqtt.md](PLAN-sigenevcloud2mqtt.md)
+`https://github.com/YpsilonTM/hassaddons`
 
 [![Open your Home Assistant instance and show the add app repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FYpsilonTM%2Fhassaddons)
 
-## Repository metadata
+## Add-ons
 
-Home Assistant repository metadata is defined in [repository.yaml](repository.yaml).
+| Add-on | Description | Docs |
+|--------|-------------|------|
+| **ModQTT** | Modbus TCP → MQTT bridge | [DOCS.md](modqtt/DOCS.md) |
+| **OCPP SIGEN to MQTT** | OCPP 1.6 central system for Sigen EV chargers | [DOCS.md](ocppsigen2mqtt/DOCS.md) |
+| **Sigen EV Cloud to MQTT** | Sigenergy cloud control (current, start/stop, phase mode) | [DOCS.md](sigenevcloud2mqtt/DOCS.md) |
+
+Pre-built images: `ghcr.io/ypsilontm/hassaddons/addon-<slug>`
+
+## Repository layout
+
+One git repository = one HA add-on **store** (`repository.yaml` at the root). Each top-level folder with a `config.yaml` is an installable add-on.
+
+See [docs/REPOSITORY.md](docs/REPOSITORY.md) for structure and [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for maintainer notes.
+
+## Metadata
+
+Store metadata: [repository.yaml](repository.yaml)

@@ -1,0 +1,147 @@
+name: Build and Push Add-on Images
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: Push images to GHCR
+        required: false
+        type: boolean
+        default: true
+      addon:
+        description: Add-on to build (blank = auto-detect from changes)
+        required: false
+        type: choice
+        options:
+          - ""
+          - modqtt
+          - ocppsigen2mqtt
+          - sigenevcloud2mqtt
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - v*
+    paths:
+      - modqtt/**
+      - ocppsigen2mqtt/**
+      - sigenevcloud2mqtt/**
+      - .github/workflows/build-addons.yml
+  pull_request:
+    paths:
+      - modqtt/**
+      - ocppsigen2mqtt/**
+      - sigenevcloud2mqtt/**
+      - .github/workflows/build-addons.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      modqtt: ${{ steps.filter.outputs.modqtt }}
+      ocppsigen2mqtt: ${{ steps.filter.outputs.ocppsigen2mqtt }}
+      sigenevcloud2mqtt: ${{ steps.filter.outputs.sigenevcloud2mqtt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            modqtt:
+              - 'modqtt/**'
+              - '.github/workflows/build-addons.yml'
+            ocppsigen2mqtt:
+              - 'ocppsigen2mqtt/**'
+              - '.github/workflows/build-addons.yml'
+            sigenevcloud2mqtt:
+              - 'sigenevcloud2mqtt/**'
+              - '.github/workflows/build-addons.yml'
+
+  docker:
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - slug: modqtt
+            image: addon-modqtt
+          - slug: ocppsigen2mqtt
+            image: addon-ocppsigen2mqtt
+          - slug: sigenevcloud2mqtt
+            image: addon-sigenevcloud2mqtt
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch' && (github.event.inputs.addon == '' || github.event.inputs.addon == matrix.slug))
+        || (matrix.slug == 'modqtt' && needs.changes.outputs.modqtt == 'true')
+        || (matrix.slug == 'ocppsigen2mqtt' && needs.changes.outputs.ocppsigen2mqtt == 'true')
+        || (matrix.slug == 'sigenevcloud2mqtt' && needs.changes.outputs.sigenevcloud2mqtt == 'true')
+      }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read add-on version
+        id: addon
+        shell: bash
+        run: |
+          echo "version=$(python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          config = yaml.safe_load(Path('${{ matrix.slug }}/config.yaml').read_text(encoding='utf-8'))
+          print(config['version'])
+          PY
+          )" >> "$GITHUB_OUTPUT"
+
+      - name: Set image name
+        id: image
+        shell: bash
+        run: |
+          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=raw,value=${{ steps.addon.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+
+      - name: Build and optionally push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.slug }}
+          file: ./${{ matrix.slug }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.push) }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.slug }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.slug }}

@@ -1,0 +1,11 @@
+# Dev / local files (image uses package.json + bun.lock via Dockerfile)
+node_modules/
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+*.md
+docs/
+fixtures/
+sample.charging.log
