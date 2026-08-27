@@ -12,7 +12,7 @@ on:
         type: boolean
         default: true
       addon:
-        description: Add-on to build (blank = auto-detect from changes)
+        description: Add-on to build (blank = all add-ons)
         required: false
         type: choice
         options:
@@ -65,26 +65,63 @@ jobs:
               - 'sigenevcloud2mqtt/**'
               - '.github/workflows/build-addons.yml'
 
-  docker:
+  prepare:
     needs: changes
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        shell: bash
+        run: |
+          add_item() {
+            if [ -n "$items" ]; then
+              items+=","
+            fi
+            items+="{\"slug\":\"$1\",\"image\":\"$2\"}"
+          }
+
+          items=""
+          event="${{ github.event_name }}"
+          selected="${{ github.event.inputs.addon }}"
+
+          if [ "$event" = "workflow_dispatch" ]; then
+            if [ -z "$selected" ]; then
+              add_item modqtt addon-modqtt
+              add_item ocppsigen2mqtt addon-ocppsigen2mqtt
+              add_item sigenevcloud2mqtt addon-sigenevcloud2mqtt
+            else
+              case "$selected" in
+                modqtt) add_item modqtt addon-modqtt ;;
+                ocppsigen2mqtt) add_item ocppsigen2mqtt addon-ocppsigen2mqtt ;;
+                sigenevcloud2mqtt) add_item sigenevcloud2mqtt addon-sigenevcloud2mqtt ;;
+              esac
+            fi
+          else
+            if [ "${{ needs.changes.outputs.modqtt }}" = "true" ]; then
+              add_item modqtt addon-modqtt
+            fi
+            if [ "${{ needs.changes.outputs.ocppsigen2mqtt }}" = "true" ]; then
+              add_item ocppsigen2mqtt addon-ocppsigen2mqtt
+            fi
+            if [ "${{ needs.changes.outputs.sigenevcloud2mqtt }}" = "true" ]; then
+              add_item sigenevcloud2mqtt addon-sigenevcloud2mqtt
+            fi
+          fi
+
+          if [ -z "$items" ]; then
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix={\"include\":[$items]}" >> "$GITHUB_OUTPUT"
+          fi
+
+  docker:
+    needs: prepare
+    if: ${{ fromJSON(needs.prepare.outputs.matrix).include[0] != null }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - slug: modqtt
-            image: addon-modqtt
-          - slug: ocppsigen2mqtt
-            image: addon-ocppsigen2mqtt
-          - slug: sigenevcloud2mqtt
-            image: addon-sigenevcloud2mqtt
-    if: >-
-      ${{
-        (github.event_name == 'workflow_dispatch' && (github.event.inputs.addon == '' || github.event.inputs.addon == matrix.slug))
-        || (matrix.slug == 'modqtt' && needs.changes.outputs.modqtt == 'true')
-        || (matrix.slug == 'ocppsigen2mqtt' && needs.changes.outputs.ocppsigen2mqtt == 'true')
-        || (matrix.slug == 'sigenevcloud2mqtt' && needs.changes.outputs.sigenevcloud2mqtt == 'true')
-      }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
