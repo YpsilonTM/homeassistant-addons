@@ -22,3 +22,5 @@ extra/
 node_modules/
 # Environment variables
 .env
+# Local Python venvs
+**/.venv/

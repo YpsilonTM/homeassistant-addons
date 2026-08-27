@@ -1,0 +1,4 @@
+aiohttp>=3.9
+paho-mqtt>=2.1
+pycryptodome>=3.20
+python-dotenv>=1.0
