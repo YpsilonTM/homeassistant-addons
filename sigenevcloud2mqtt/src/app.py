@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from src.cloud import SigenCloudClient
+from src.cloud import EnergyInfo, SigenCloudClient
 from src.config import Settings, load_settings
 from src.mqtt_bridge import BridgeState, MqttBridge, PHASE_MODE_SET_OPTIONS, PHASE_MODE_STATE_OPTIONS
 
@@ -70,16 +70,38 @@ def _clamp_amps(requested: float, settings: Settings, cloud_max: float | None) -
     return max(settings.min_current, min(upper, amps))
 
 
-def _snapshot_to_bridge_state(snapshot) -> BridgeState:
+def _parse_lifetime_kwh(energy: EnergyInfo | None, last_known: float | None) -> float | None:
+    """Return a publishable cloud total, or None so HA marks the sensor unavailable."""
+    if energy is None:
+        LOGGER.debug("lifetime_energy_unavailable reason=api_failed")
+        return None
+
+    value = round(energy.lifetime_kwh, 2)
+    if value <= 0:
+        LOGGER.warning("lifetime_energy_unavailable reason=invalid_value value=%s", value)
+        return None
+
+    if last_known is not None and value + 0.01 < last_known:
+        LOGGER.warning(
+            "lifetime_energy_unavailable reason=regressed new=%s last_known=%s",
+            value,
+            last_known,
+        )
+        return None
+
+    return value
+
+
+def _snapshot_to_bridge_state(snapshot, last_lifetime_kwh: float | None = None) -> BridgeState:
     rt = snapshot.realtime
-    energy = snapshot.energy
+    lifetime_kwh = _parse_lifetime_kwh(snapshot.energy, last_lifetime_kwh)
     return BridgeState(
         status=snapshot.status_label,
         power_w=round((rt.power_kw * 1000) if rt else 0.0, 1),
         current_a=round(rt.current_a if rt else 0.0, 2),
         voltage_v=round(rt.voltage_v if rt else 0.0, 1),
         active_phases=rt.active_phases if rt else 0,
-        lifetime_energy_kwh=round(energy.lifetime_kwh if energy else 0.0, 2),
+        lifetime_energy_kwh=lifetime_kwh,
         setpoint_a=snapshot.current.last_set_current,
         max_current_a=snapshot.current.max_current,
         phase_mode=snapshot.phase_mode,
@@ -150,6 +172,7 @@ async def _handle_command(
     client: SigenCloudClient,
     settings: Settings,
     command: BridgeCommand,
+    last_lifetime_kwh: float | None = None,
 ) -> BridgeState:
     if command.kind == CommandKind.SET_CURRENT:
         info = await client.get_ac_ev_current()
@@ -164,7 +187,7 @@ async def _handle_command(
         await client.stop_charging()
 
     snapshot = await client.get_snapshot()
-    return _snapshot_to_bridge_state(snapshot)
+    return _snapshot_to_bridge_state(snapshot, last_lifetime_kwh)
 
 
 async def run_bridge(settings: Settings) -> int:
@@ -210,6 +233,7 @@ async def run_bridge(settings: Settings) -> int:
     )
 
     last_state: BridgeState | None = None
+    last_lifetime_kwh: float | None = None
 
     async with SigenCloudClient(settings.username, settings.password, settings.region) as client:
         await client.login()
@@ -219,6 +243,7 @@ async def run_bridge(settings: Settings) -> int:
 
         await asyncio.to_thread(mqtt.connect_with_backoff)
         mqtt.publish_discovery()
+        mqtt.publish_lifetime_energy(None)
 
         LOGGER.info(
             "bridge_started poll=%ss mqtt=%s:%s prefix=%s device_id=%s",
@@ -239,7 +264,11 @@ async def run_bridge(settings: Settings) -> int:
                             LOGGER.warning("invalid_phase_mode payload=%r", command.value)
                             continue
                     try:
-                        state = await _handle_command(client, settings, command)
+                        state = await _handle_command(
+                            client, settings, command, last_lifetime_kwh
+                        )
+                        if state.lifetime_energy_kwh is not None:
+                            last_lifetime_kwh = state.lifetime_energy_kwh
                         mqtt.publish_state_bundle(state)
                         last_state = state
                     except Exception:
@@ -249,7 +278,9 @@ async def run_bridge(settings: Settings) -> int:
 
             try:
                 snapshot = await client.get_snapshot()
-                state = _snapshot_to_bridge_state(snapshot)
+                state = _snapshot_to_bridge_state(snapshot, last_lifetime_kwh)
+                if state.lifetime_energy_kwh is not None:
+                    last_lifetime_kwh = state.lifetime_energy_kwh
                 if last_state != state:
                     mqtt.publish_state_bundle(state)
                     last_state = state

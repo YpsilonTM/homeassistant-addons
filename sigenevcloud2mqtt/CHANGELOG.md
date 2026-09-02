@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- Fix lifetime energy spikes: invalid cloud readings no longer publish `0` — the sensor is marked unavailable via `{prefix}/lifetime_energy/availability` (HA MQTT best practice for `total_increasing` sensors)
+
 ## 0.2.5
 
 - Fix add-on crash: `run.sh` had Windows CRLF line endings (`bash\r` in container)

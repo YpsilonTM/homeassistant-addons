@@ -77,7 +77,8 @@ Prefix default: `sigen_evac`
 | `{prefix}/current_a` | out | measured amps |
 | `{prefix}/voltage_v` | out | volts |
 | `{prefix}/active_phases` | out | `0–3` inferred |
-| `{prefix}/lifetime_energy_kwh` | out | kWh |
+| `{prefix}/lifetime_energy_kwh` | out | kWh (only published on valid cloud reads) |
+| `{prefix}/lifetime_energy/availability` | out | `online` / `offline` — HA marks lifetime sensor unavailable when `offline` |
 | `{prefix}/current/state` | out | setpoint amps |
 | `{prefix}/current/set` | in | setpoint amps |
 | `{prefix}/phase_mode/state` | out | `1_phase` / `3_phase` / `auto` / `unknown` |

@@ -22,7 +22,7 @@ class BridgeState:
     current_a: float = 0.0
     voltage_v: float = 0.0
     active_phases: int = 0
-    lifetime_energy_kwh: float = 0.0
+    lifetime_energy_kwh: float | None = None
     setpoint_a: float = 0.0
     max_current_a: float = 0.0
     phase_mode: str = "unknown"
@@ -63,6 +63,7 @@ class MqttBridge:
         self.voltage_topic = f"{p}/voltage_v"
         self.active_phases_topic = f"{p}/active_phases"
         self.lifetime_energy_topic = f"{p}/lifetime_energy_kwh"
+        self.lifetime_energy_availability_topic = f"{p}/lifetime_energy/availability"
         self.phase_mode_state_topic = f"{p}/phase_mode/state"
         self.phase_mode_set_topic = f"{p}/phase_mode/set"
         self.command_topic = f"{p}/command"
@@ -151,6 +152,10 @@ class MqttBridge:
 
     def disconnect(self) -> None:
         try:
+            self.publish_lifetime_energy(None)
+        except Exception:
+            pass
+        try:
             self.publish_availability(False)
         except Exception:
             pass
@@ -173,33 +178,37 @@ class MqttBridge:
             return str(int(value))
         return f"{value:.2f}"
 
+    def publish_lifetime_energy(self, lifetime_kwh: float | None) -> None:
+        """Publish lifetime total or mark the sensor unavailable (never publish 0 as a glitch)."""
+        if lifetime_kwh is not None:
+            self.publish(self.lifetime_energy_availability_topic, "online", retain=True)
+            self.publish(self.lifetime_energy_topic, self._num(lifetime_kwh), retain=True)
+        else:
+            self.publish(self.lifetime_energy_availability_topic, "offline", retain=True)
+
     def publish_state_bundle(self, state: BridgeState) -> None:
         self.publish(self.status_topic, state.status, retain=True)
         self.publish(self.power_topic, self._num(state.power_w), retain=True)
         self.publish(self.current_meas_topic, self._num(state.current_a), retain=True)
         self.publish(self.voltage_topic, self._num(state.voltage_v), retain=True)
         self.publish(self.active_phases_topic, str(state.active_phases), retain=True)
-        self.publish(self.lifetime_energy_topic, self._num(state.lifetime_energy_kwh), retain=True)
+        self.publish_lifetime_energy(state.lifetime_energy_kwh)
         self.publish(self.current_state_topic, self._num(state.setpoint_a), retain=True)
         self.publish(self.max_current_state_topic, self._num(state.max_current_a), retain=True)
         self.publish(self.phase_mode_state_topic, state.phase_mode, retain=True)
-        self.publish(
-            self.state_topic,
-            json.dumps(
-                {
-                    "status": state.status,
-                    "power_w": state.power_w,
-                    "current_a": state.current_a,
-                    "voltage_v": state.voltage_v,
-                    "active_phases": state.active_phases,
-                    "lifetime_energy_kwh": state.lifetime_energy_kwh,
-                    "setpoint_a": state.setpoint_a,
-                    "max_current_a": state.max_current_a,
-                    "phase_mode": state.phase_mode,
-                }
-            ),
-            retain=True,
-        )
+        bundle = {
+            "status": state.status,
+            "power_w": state.power_w,
+            "current_a": state.current_a,
+            "voltage_v": state.voltage_v,
+            "active_phases": state.active_phases,
+            "setpoint_a": state.setpoint_a,
+            "max_current_a": state.max_current_a,
+            "phase_mode": state.phase_mode,
+        }
+        if state.lifetime_energy_kwh is not None:
+            bundle["lifetime_energy_kwh"] = state.lifetime_energy_kwh
+        self.publish(self.state_topic, json.dumps(bundle), retain=True)
 
     def publish_phase_mode(self, mode: str) -> None:
         self.publish(self.phase_mode_state_topic, mode, retain=True)
@@ -212,6 +221,11 @@ class MqttBridge:
             "model": "EV AC (cloud)",
         }
         availability = {"topic": self.availability_topic}
+        lifetime_energy_availability = {
+            "topic": self.lifetime_energy_availability_topic,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }
 
         def sensor(name, uid, topic, unit=None, device_class=None, state_class=None, category=None):
             payload = {
@@ -308,14 +322,17 @@ class MqttBridge:
             ),
             (
                 f"homeassistant/sensor/{self.device_id}_lifetime_energy/config",
-                sensor(
-                    "Sigen EV Lifetime Energy",
-                    "lifetime_energy",
-                    self.lifetime_energy_topic,
-                    unit="kWh",
-                    device_class="energy",
-                    state_class="total_increasing",
-                ),
+                {
+                    "name": "Sigen EV Lifetime Energy",
+                    "unique_id": f"{self.device_id}_lifetime_energy",
+                    "state_topic": self.lifetime_energy_topic,
+                    "availability": [availability, lifetime_energy_availability],
+                    "availability_mode": "all",
+                    "unit_of_measurement": "kWh",
+                    "device_class": "energy",
+                    "state_class": "total_increasing",
+                    "device": device,
+                },
             ),
             (
                 f"homeassistant/select/{self.device_id}_phase_mode/config",
