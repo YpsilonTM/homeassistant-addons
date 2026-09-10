@@ -1,7 +1,7 @@
 name: ModQTT
 slug: modqtt
 description: General-purpose Modbus TCP to MQTT bridge
-version: 0.2.1
+version: 0.2.2
 image: ghcr.io/ypsilontm/hassaddons/addon-modqtt
 legacy: true
 url: https://github.com/YpsilonTM/hassaddons

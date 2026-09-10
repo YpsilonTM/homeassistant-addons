@@ -80,15 +80,18 @@ def main() -> int:
         client_id=config.mqtt.client_id,
         username=config.mqtt.username,
         password=config.mqtt.password,
+        availability_topic=config.mqtt.availability_topic,
     )
 
     modbus.connect_with_backoff()
     mqtt.connect_with_backoff()
+    # Ensure availability is online even if on_connect already published it.
     mqtt.publish_availability(config.mqtt.availability_topic, online=True)
 
     # Publish Home Assistant discovery if enabled
     if getattr(config.mqtt, "discovery_enabled", False):
         from src.publisher import publish_discovery
+
         publish_discovery(config.mqtt, mqtt, config.readings)
 
     logger.info("bridge_started readings=%s", len(config.readings))
