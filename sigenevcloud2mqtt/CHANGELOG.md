@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Fix configuration validation: `mqtt_port` is an optional integer again (`int?`), not a string — saved configs with `1883` no longer fail schema checks
+- Source bashio when present so empty MQTT options can fall back to Supervisor discovery; treat JSON `null` options as empty
+
 ## 0.3.0
 
 ### Breaking
