@@ -8,4 +8,5 @@
 scripts/
 .venv/
 __pycache__/
-requirements.txt
+tests/
+requirements-dev.txt

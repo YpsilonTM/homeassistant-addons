@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -13,6 +12,8 @@ LOGGER = logging.getLogger(__name__)
 
 PHASE_MODE_SET_OPTIONS = ("1_phase", "3_phase", "auto")
 PHASE_MODE_STATE_OPTIONS = ("unknown", *PHASE_MODE_SET_OPTIONS)
+
+_REMOVED_PHASE_BUTTON_SUFFIXES = ("phase_1", "phase_3", "phase_auto")
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,7 @@ class MqttBridge:
         self.lifetime_energy_availability_topic = f"{p}/lifetime_energy/availability"
         self.phase_mode_state_topic = f"{p}/phase_mode/state"
         self.phase_mode_set_topic = f"{p}/phase_mode/set"
+        self.phase_mode_availability_topic = f"{p}/phase_mode/availability"
         self.command_topic = f"{p}/command"
 
         if hasattr(mqtt, "CallbackAPIVersion"):
@@ -80,9 +82,14 @@ class MqttBridge:
             self._client.username_pw_set(username, password)
 
         self._connected = threading.Event()
+        self._discovery_published = False
+        self._setpoint_out_of_range_warned = False
+        self._device_model: str | None = None
+        self._device_sw_version: str | None = None
         self._on_current_set: Callable[[str], None] | None = None
         self._on_phase_mode_set: Callable[[str], None] | None = None
         self._on_command: Callable[[str], None] | None = None
+        self._on_reconnect: Callable[[], None] | None = None
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
@@ -97,6 +104,15 @@ class MqttBridge:
     def set_command_handler(self, handler: Callable[[str], None]) -> None:
         self._on_command = handler
 
+    def set_reconnect_handler(self, handler: Callable[[], None]) -> None:
+        self._on_reconnect = handler
+
+    def update_device_info(self, model: str | None, sw_version: str | None) -> None:
+        if model:
+            self._device_model = model
+        if sw_version:
+            self._device_sw_version = sw_version
+
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
         del userdata, flags, properties
         rc = reason_code.value if hasattr(reason_code, "value") else reason_code
@@ -104,10 +120,15 @@ class MqttBridge:
             LOGGER.error("mqtt_connect_failed reason=%s", reason_code)
             return
         self._connected.set()
+        self.publish_availability(True)
+        if self._discovery_published:
+            self.publish_discovery()
         client.subscribe(self.current_set_topic)
         client.subscribe(self.phase_mode_set_topic)
         client.subscribe(self.command_topic)
         LOGGER.info("mqtt_connected host=%s port=%s", self.host, self.port)
+        if self._on_reconnect:
+            self._on_reconnect()
 
     def _on_disconnect(self, client, userdata, disconnect_flags=None, reason_code=None, properties=None):
         del client, userdata, disconnect_flags, properties
@@ -125,34 +146,26 @@ class MqttBridge:
         elif topic == self.command_topic and self._on_command:
             self._on_command(payload)
 
-    def connect_with_backoff(self, max_delay_seconds: float = 30.0) -> None:
-        delay = 1.0
-        while not self._connected.is_set():
-            try:
-                self._client.connect(self.host, self.port)
-                self._client.loop_start()
-                if self._connected.wait(timeout=5.0):
-                    self.publish_availability(True)
-                    return
-            except Exception as exc:
-                LOGGER.warning(
-                    "mqtt_connect_error host=%s port=%s error=%s",
-                    self.host,
-                    self.port,
-                    exc,
-                )
-            LOGGER.warning(
-                "mqtt_connect_retry host=%s port=%s next_delay=%.1f",
-                self.host,
-                self.port,
-                delay,
-            )
-            time.sleep(delay)
-            delay = min(delay * 2, max_delay_seconds)
+    def connect_with_backoff(
+        self,
+        stop_event: threading.Event,
+        max_delay_seconds: float = 30.0,
+    ) -> None:
+        self._client.reconnect_delay_set(min_delay=1, max_delay=int(max_delay_seconds))
+        self._client.connect_async(self.host, self.port)
+        self._client.loop_start()
+        while not stop_event.is_set():
+            if self._connected.wait(timeout=0.5):
+                return
+        LOGGER.info("mqtt_connect_aborted_by_stop_event")
 
     def disconnect(self) -> None:
         try:
             self.publish_lifetime_energy(None)
+        except Exception:
+            pass
+        try:
+            self.publish_phase_mode("unknown")
         except Exception:
             pass
         try:
@@ -187,22 +200,34 @@ class MqttBridge:
             self.publish(self.lifetime_energy_availability_topic, "offline", retain=True)
 
     def publish_state_bundle(self, state: BridgeState) -> None:
+        raw_setpoint = state.setpoint_a
+        setpoint = min(float(self.max_current), max(float(self.min_current), float(raw_setpoint)))
+        if setpoint != float(raw_setpoint) and not self._setpoint_out_of_range_warned:
+            LOGGER.warning(
+                "setpoint_clamped raw=%s clamped=%s range=[%s,%s]",
+                raw_setpoint,
+                setpoint,
+                self.min_current,
+                self.max_current,
+            )
+            self._setpoint_out_of_range_warned = True
+
         self.publish(self.status_topic, state.status, retain=True)
         self.publish(self.power_topic, self._num(state.power_w), retain=True)
         self.publish(self.current_meas_topic, self._num(state.current_a), retain=True)
         self.publish(self.voltage_topic, self._num(state.voltage_v), retain=True)
         self.publish(self.active_phases_topic, str(state.active_phases), retain=True)
         self.publish_lifetime_energy(state.lifetime_energy_kwh)
-        self.publish(self.current_state_topic, self._num(state.setpoint_a), retain=True)
+        self.publish(self.current_state_topic, self._num(setpoint), retain=True)
         self.publish(self.max_current_state_topic, self._num(state.max_current_a), retain=True)
-        self.publish(self.phase_mode_state_topic, state.phase_mode, retain=True)
+        self.publish_phase_mode(state.phase_mode)
         bundle = {
             "status": state.status,
             "power_w": state.power_w,
             "current_a": state.current_a,
             "voltage_v": state.voltage_v,
             "active_phases": state.active_phases,
-            "setpoint_a": state.setpoint_a,
+            "setpoint_a": setpoint,
             "max_current_a": state.max_current_a,
             "phase_mode": state.phase_mode,
         }
@@ -211,6 +236,10 @@ class MqttBridge:
         self.publish(self.state_topic, json.dumps(bundle), retain=True)
 
     def publish_phase_mode(self, mode: str) -> None:
+        if mode == "unknown":
+            self.publish(self.phase_mode_availability_topic, "offline", retain=True)
+            return
+        self.publish(self.phase_mode_availability_topic, "online", retain=True)
         self.publish(self.phase_mode_state_topic, mode, retain=True)
 
     def publish_discovery(self) -> None:
@@ -218,11 +247,19 @@ class MqttBridge:
             "identifiers": [self.device_id],
             "name": self.device_name,
             "manufacturer": "Sigenergy",
-            "model": "EV AC (cloud)",
+            "model": self._device_model or "EV AC (cloud)",
         }
+        if self._device_sw_version:
+            device["sw_version"] = self._device_sw_version
+
         availability = {"topic": self.availability_topic}
         lifetime_energy_availability = {
             "topic": self.lifetime_energy_availability_topic,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }
+        phase_mode_availability = {
+            "topic": self.phase_mode_availability_topic,
             "payload_available": "online",
             "payload_not_available": "offline",
         }
@@ -317,6 +354,7 @@ class MqttBridge:
                     "Sigen EV Active Phases",
                     "active_phases",
                     self.active_phases_topic,
+                    state_class="measurement",
                     category="diagnostic",
                 ),
             ),
@@ -341,47 +379,9 @@ class MqttBridge:
                     "unique_id": f"{self.device_id}_phase_mode",
                     "state_topic": self.phase_mode_state_topic,
                     "command_topic": self.phase_mode_set_topic,
-                    "availability": [availability],
-                    "options": list(PHASE_MODE_STATE_OPTIONS),
-                    "icon": "mdi:sine-wave",
-                    "entity_category": "config",
-                    "device": device,
-                },
-            ),
-            (
-                f"homeassistant/button/{self.device_id}_phase_1/config",
-                {
-                    "name": "Sigen EV Set 1-Phase",
-                    "unique_id": f"{self.device_id}_phase_1",
-                    "command_topic": self.phase_mode_set_topic,
-                    "payload_press": "1_phase",
-                    "availability": [availability],
-                    "icon": "mdi:sine-wave",
-                    "entity_category": "config",
-                    "device": device,
-                },
-            ),
-            (
-                f"homeassistant/button/{self.device_id}_phase_3/config",
-                {
-                    "name": "Sigen EV Set 3-Phase",
-                    "unique_id": f"{self.device_id}_phase_3",
-                    "command_topic": self.phase_mode_set_topic,
-                    "payload_press": "3_phase",
-                    "availability": [availability],
-                    "icon": "mdi:sine-wave",
-                    "entity_category": "config",
-                    "device": device,
-                },
-            ),
-            (
-                f"homeassistant/button/{self.device_id}_phase_auto/config",
-                {
-                    "name": "Sigen EV Set Auto Phase",
-                    "unique_id": f"{self.device_id}_phase_auto",
-                    "command_topic": self.phase_mode_set_topic,
-                    "payload_press": "auto",
-                    "availability": [availability],
+                    "availability": [availability, phase_mode_availability],
+                    "availability_mode": "all",
+                    "options": list(PHASE_MODE_SET_OPTIONS),
                     "icon": "mdi:sine-wave",
                     "entity_category": "config",
                     "device": device,
@@ -415,4 +415,11 @@ class MqttBridge:
 
         for topic, payload in configs:
             self.publish(topic, json.dumps(payload), retain=True)
+
+        # Clear retained discovery for removed duplicate phase buttons.
+        for suffix in _REMOVED_PHASE_BUTTON_SUFFIXES:
+            clear_topic = f"homeassistant/button/{self.device_id}_{suffix}/config"
+            self.publish(clear_topic, "", retain=True)
+
+        self._discovery_published = True
         LOGGER.info("mqtt_discovery_published device_id=%s entities=%s", self.device_id, len(configs))

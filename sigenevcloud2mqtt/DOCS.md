@@ -2,14 +2,16 @@
 
 Bridge Sigenergy cloud APIs for a standalone Sigen EV AC charger to MQTT, with Home Assistant discovery.
 
-## Features (v0.2.4)
+## Features
 
 - Login to Sigenergy Cloud (mySigen credentials)
 - **Current setpoint** get/set (MQTT number)
 - **Start / stop** charging (MQTT buttons + `{prefix}/command`)
 - **Status**, live **power/current/voltage**, **lifetime energy**
 - **Active phases** inferred from realtime telemetry while charging
-- **Phase mode** read/write (1-phase / 3-phase / auto), synced with mySigen Advanced Settings
+- **Phase mode** read/write via MQTT select (`1_phase` / `3_phase` / `auto`), synced with mySigen Advanced Settings
+
+Phase mode is controlled only through the select entity (and `{prefix}/phase_mode/set`). The older duplicate Set 1-Phase / 3-Phase / Auto buttons were removed in 0.3.0.
 
 ## Configuration
 
@@ -19,11 +21,14 @@ Bridge Sigenergy cloud APIs for a standalone Sigen EV AC charger to MQTT, with H
 | `password` | _(empty)_ | Account password |
 | `region` | `eu` | `eu`, `apac`, `us`, or `cn` |
 | `poll_interval_seconds` | `15` | Cloud poll interval |
+| `slow_poll_multiplier` | `4` | Fetch energy totals and advanced settings every Nth poll cycle (1–60) |
 | `min_current` / `max_current` | `6` / `16` | Clamp range for the HA number |
-| `mqtt_host` | `core-mosquitto` | MQTT broker |
+| `mqtt_host` / `mqtt_port` / `mqtt_username` / `mqtt_password` | _(empty)_ | MQTT broker; when empty, filled from the Supervisor MQTT service if available |
 | `topic_prefix` | `sigen_evac` | Root topic prefix |
 | `device_name` | `Sigen EV AC` | HA device name |
 | `log_level` | `INFO` | Log verbosity |
+
+Leave the MQTT options blank on a supervised install with the Mosquitto add-on (or another broker exposed via Supervisor). Explicit values always win over auto-discovery.
 
 ## Cloud API notes
 
@@ -57,8 +62,7 @@ The mySigen web app loads this from:
 
 `GET device/acevse/more-setting/{stationId}?snCode=`
 
-(same screen as `#/charger/.../charger-advanced-setting`). The bridge polls this
-every cycle and publishes `{prefix}/phase_mode/state`.
+(same screen as `#/charger/.../charger-advanced-setting`). Energy totals and Advanced Settings are refreshed every `slow_poll_multiplier` poll cycles (default every 4th cycle). Phase mode state is published on `{prefix}/phase_mode/state`.
 
 Writes return `data: true` when accepted. Combined payloads with null fields often
 return `data: false` — the bridge uses minimal partial POSTs and retries after stop
@@ -81,9 +85,12 @@ Prefix default: `sigen_evac`
 | `{prefix}/lifetime_energy/availability` | out | `online` / `offline` — HA marks lifetime sensor unavailable when `offline` |
 | `{prefix}/current/state` | out | setpoint amps |
 | `{prefix}/current/set` | in | setpoint amps |
-| `{prefix}/phase_mode/state` | out | `1_phase` / `3_phase` / `auto` / `unknown` |
+| `{prefix}/phase_mode/state` | out | `1_phase` / `3_phase` / `auto` |
 | `{prefix}/phase_mode/set` | in | same values |
+| `{prefix}/phase_mode/availability` | out | `online` / `offline` — select is unavailable while mode is unknown |
 | `{prefix}/command` | in | `START` / `STOP` |
+
+The phase mode select options are exactly `1_phase`, `3_phase`, and `auto` (`unknown` is not an option). When the cloud mode cannot be decoded, the bridge publishes `offline` on `{prefix}/phase_mode/availability` (with `availability_mode: all` on the discovery config) instead of exposing `unknown` as a selectable state.
 
 ## Local development
 

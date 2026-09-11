@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0
+
+### Breaking
+
+- Remove duplicate phase-mode buttons (Set 1-Phase / 3-Phase / Auto; unique ids `*_phase_1`, `*_phase_3`, `*_phase_auto`). Use the phase mode select instead. After updating, delete any leftover button entities from the Home Assistant entity registry if they remain.
+- Phase mode select options are now exactly `1_phase` / `3_phase` / `auto` — `unknown` is no longer an option; unknown cloud mode marks the select unavailable via `{prefix}/phase_mode/availability`.
+
+### Fixes and improvements
+
+- MQTT availability recovers after broker reconnect; discovery is republished on reconnect
+- Invalid start/stop payloads no longer stop charging; command queue coalesces last-wins writes
+- Cloud HTTP timeouts, 401 re-login retry, and 429/503 backoff
+- Startup retries cloud login; MQTT comes up before cloud so entities still appear during outages
+- Lifetime energy baseline persisted across restarts; setpoint clamped to configured min/max
+- Slow-poll cadence for energy/advanced settings (`slow_poll_multiplier`); MQTT broker auto-discovery from Supervisor when mqtt options are empty
+- Packaging: pinned deps from `requirements.txt`, `mqtt:want` service declaration
+
 ## 0.2.6
 
 - Fix lifetime energy spikes: invalid cloud readings no longer publish `0` — the sensor is marked unavailable via `{prefix}/lifetime_energy/availability` (HA MQTT best practice for `total_increasing` sensors)

@@ -20,6 +20,8 @@ class Settings:
     topic_prefix: str
     device_name: str
     log_level: str
+    slow_poll_multiplier: int
+    state_dir: str
 
 
 def _env(name: str, default: str = "") -> str:
@@ -59,6 +61,16 @@ def load_settings() -> Settings:
     if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
         raise ValueError(f"Unsupported LOG_LEVEL={log_level!r}")
 
+    slow_poll_multiplier = _env_int("SLOW_POLL_MULTIPLIER", 4)
+    if slow_poll_multiplier < 1 or slow_poll_multiplier > 60:
+        raise ValueError(f"Invalid SLOW_POLL_MULTIPLIER={slow_poll_multiplier}")
+
+    # Empty MQTT_* values (from optional add-on options) fall back to defaults.
+    mqtt_host = _env("MQTT_HOST") or "core-mosquitto"
+    mqtt_port = _env_int("MQTT_PORT", 1883)
+    mqtt_username = _env("MQTT_USER", "")
+    mqtt_password = _env("MQTT_PASS", "")
+
     return Settings(
         username=username,
         password=password,
@@ -66,12 +78,14 @@ def load_settings() -> Settings:
         poll_interval_seconds=_env_float("POLL_INTERVAL_SECONDS", 15.0),
         min_current=min_current,
         max_current=max_current,
-        mqtt_host=_env("MQTT_HOST", "core-mosquitto"),
-        mqtt_port=_env_int("MQTT_PORT", 1883),
-        mqtt_username=_env("MQTT_USER", ""),
-        mqtt_password=_env("MQTT_PASS", ""),
-        mqtt_client_id=_env("MQTT_CLIENT_ID", "sigenevcloud2mqtt-addon"),
-        topic_prefix=_env("MQTT_TOPIC_PREFIX", "sigen_evac"),
-        device_name=_env("DEVICE_NAME", "Sigen EV AC"),
+        mqtt_host=mqtt_host,
+        mqtt_port=mqtt_port,
+        mqtt_username=mqtt_username,
+        mqtt_password=mqtt_password,
+        mqtt_client_id=_env("MQTT_CLIENT_ID") or "sigenevcloud2mqtt-addon",
+        topic_prefix=_env("MQTT_TOPIC_PREFIX") or "sigen_evac",
+        device_name=_env("DEVICE_NAME") or "Sigen EV AC",
         log_level=log_level,
+        slow_poll_multiplier=slow_poll_multiplier,
+        state_dir=_env("STATE_DIR") or "/data",
     )

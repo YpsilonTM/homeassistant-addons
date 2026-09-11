@@ -1,7 +1,7 @@
 name: Sigen EV Cloud to MQTT
 slug: sigenevcloud2mqtt
 description: Sigenergy cloud bridge for Sigen EV AC – current, start/stop, status, telemetry, and phase mode via MQTT for Home Assistant
-version: 0.2.6
+version: 0.3.0
 image: ghcr.io/ypsilontm/hassaddons/addon-sigenevcloud2mqtt
 url: https://github.com/YpsilonTM/hassaddons
 arch:
@@ -10,17 +10,18 @@ arch:
 startup: application
 boot: auto
 init: false
-map:
-  - data:rw
+services:
+  - mqtt:want
 options:
   username: ""
   password: ""
   region: eu
   poll_interval_seconds: 15
+  slow_poll_multiplier: 4
   min_current: 6
   max_current: 16
-  mqtt_host: core-mosquitto
-  mqtt_port: 1883
+  mqtt_host: ""
+  mqtt_port: ""
   mqtt_username: ""
   mqtt_password: ""
   mqtt_client_id: sigenevcloud2mqtt-addon
@@ -32,10 +33,11 @@ schema:
   password: password
   region: list(eu|apac|us|cn)
   poll_interval_seconds: int(5,300)
+  slow_poll_multiplier: int(1,60)
   min_current: int(6,32)
   max_current: int(6,32)
   mqtt_host: str
-  mqtt_port: int
+  mqtt_port: str
   mqtt_username: str
   mqtt_password: password
   mqtt_client_id: str

@@ -10,11 +10,9 @@ RUN apk add --no-cache python3 py3-pip \
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-    "aiohttp>=3.9" \
-    "paho-mqtt>=2.1" \
-    "pycryptodome>=3.20"
+    pip install --no-cache-dir -r /app/requirements.txt
 
 COPY src /app/src
 COPY run.sh /run.sh

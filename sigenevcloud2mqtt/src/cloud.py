@@ -37,6 +37,23 @@ WEB_APP_USER_AGENT = (
 )
 
 TOKEN_REFRESH_SKEW_SECONDS = 60
+HTTP_MAX_ATTEMPTS = 3
+HTTP_BACKOFF_BASE_SECONDS = 1.0
+
+
+def _redact_secrets(payload: object) -> object:
+    """Return a copy of payload with access_token/refresh_token redacted for logs."""
+    if isinstance(payload, dict):
+        redacted: dict = {}
+        for key, value in payload.items():
+            if key in {"access_token", "refresh_token"} and value is not None:
+                redacted[key] = "***"
+            else:
+                redacted[key] = _redact_secrets(value)
+        return redacted
+    if isinstance(payload, list):
+        return [_redact_secrets(item) for item in payload]
+    return payload
 
 
 class ChargeStatus(IntEnum):
@@ -133,13 +150,20 @@ class EvacSnapshot:
 class SigenCloudClient:
     """Thin Sigenergy cloud client for standalone AC EVSE (EVAC)."""
 
-    def __init__(self, username: str, password: str, region: str = "eu") -> None:
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        region: str = "eu",
+        timeout_seconds: float = 30.0,
+    ) -> None:
         if region not in REGION_BASE_URLS:
             raise ValueError(f"Unsupported region '{region}'")
         self.username = username
         self._password_encrypted = encrypt_password(password)
         self.region = region
         self.base_url = REGION_BASE_URLS[region]
+        self.timeout_seconds = timeout_seconds
         self.user_device_id = str(int(time.time() * 1000))
         self.session_id = str(uuid.uuid4())
         self.access_token: str | None = None
@@ -148,9 +172,14 @@ class SigenCloudClient:
         self.station_id: int | str | None = None
         self.ac_sn: str | None = None
         self._session: aiohttp.ClientSession | None = None
+        self._cached_device_param: dict | None = None
+        self._cached_energy: EnergyInfo | None = None
+        self._cached_more_setting: MoreSettingInfo | None = None
 
     async def __aenter__(self) -> SigenCloudClient:
-        self._session = aiohttp.ClientSession()
+        self._session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=self.timeout_seconds),
+        )
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -168,6 +197,7 @@ class SigenCloudClient:
         return self.base_url.rstrip("/").replace("https://api-", "https://app-", 1)
 
     def _sigen_timestamp(self) -> str:
+        # Sigenergy expects epoch milliseconds multiplied by 1000 (not microseconds).
         return str(int(time.time() * 1000) * 1000)
 
     def _request_headers(
@@ -223,10 +253,14 @@ class SigenCloudClient:
         ) as response:
             payload = await response.json(content_type=None)
             if response.status != 200:
-                raise RuntimeError(f"Login failed status={response.status} body={payload}")
+                raise RuntimeError(
+                    f"Login failed status={response.status} body={_redact_secrets(payload)}"
+                )
             token_data = payload.get("data") or {}
             if "access_token" not in token_data:
-                raise RuntimeError(f"Login response missing access_token: {payload}")
+                raise RuntimeError(
+                    f"Login response missing access_token: {_redact_secrets(payload)}"
+                )
             self._apply_token(token_data)
             LOGGER.info("cloud_login_ok region=%s", self.region)
 
@@ -249,12 +283,19 @@ class SigenCloudClient:
         ) as response:
             payload = await response.json(content_type=None)
             if response.status != 200:
-                LOGGER.warning("token_refresh_failed status=%s body=%s; re-login", response.status, payload)
+                LOGGER.warning(
+                    "token_refresh_failed status=%s body=%s; re-login",
+                    response.status,
+                    _redact_secrets(payload),
+                )
                 await self.login()
                 return
             token_data = payload.get("data") or {}
             if "access_token" not in token_data:
-                LOGGER.warning("token_refresh_invalid; re-login body=%s", payload)
+                LOGGER.warning(
+                    "token_refresh_invalid; re-login body=%s",
+                    _redact_secrets(payload),
+                )
                 await self.login()
                 return
             self._apply_token(token_data)
@@ -294,19 +335,57 @@ class SigenCloudClient:
         await self.ensure_valid_token()
         url = f"{self.base_url}{path}"
         session = self._session_or_raise()
-        async with session.request(
-            method,
-            url,
-            headers=self._auth_headers(),
-            params=params,
-            json=json_body,
-        ) as response:
-            payload = await response.json(content_type=None)
-            if response.status != 200 or payload.get("code") not in (0, None):
+        retried_401 = False
+        attempt = 0
+
+        while True:
+            async with session.request(
+                method,
+                url,
+                headers=self._auth_headers(),
+                params=params,
+                json=json_body,
+            ) as response:
+                payload = await response.json(content_type=None)
+                status = response.status
+                retry_after = response.headers.get("Retry-After")
+
+            if status == 401 and not retried_401:
+                LOGGER.warning("cloud_http_401 path=%s; re-login and retry once", path)
+                self.access_token = None
+                await self.login()
+                retried_401 = True
+                continue
+
+            if status in (429, 503) and attempt < HTTP_MAX_ATTEMPTS - 1:
+                delay = self._retry_after_delay(retry_after, attempt)
+                LOGGER.warning(
+                    "cloud_http_retry status=%s path=%s attempt=%s delay=%.1fs",
+                    status,
+                    path,
+                    attempt + 1,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                attempt += 1
+                continue
+
+            if status != 200 or payload.get("code") not in (0, None):
                 raise RuntimeError(
-                    f"{method} {path} failed status={response.status} payload={payload}"
+                    f"{method} {path} failed status={status} "
+                    f"payload={_redact_secrets(payload)}"
                 )
             return payload
+
+    @staticmethod
+    def _retry_after_delay(retry_after: str | None, attempt: int) -> float:
+        """Prefer Retry-After header; otherwise exponential backoff."""
+        if retry_after is not None:
+            try:
+                return max(0.0, float(retry_after))
+            except ValueError:
+                pass
+        return HTTP_BACKOFF_BASE_SECONDS * (2**attempt)
 
     async def fetch_station_info(self) -> dict:
         payload = await self._request_json("GET", "device/owner/station/home")
@@ -361,6 +440,7 @@ class SigenCloudClient:
         return code, label
 
     async def start_charging(self) -> dict:
+        # Cloud quirk: enable=0 starts charging; enable=1 stops (do not "fix").
         station_id, ac_sn = self._require_station()
         payload = await self._request_json(
             "PUT",
@@ -371,6 +451,7 @@ class SigenCloudClient:
         return payload
 
     async def stop_charging(self) -> dict:
+        # Cloud quirk: enable=1 stops charging; enable=0 starts (do not "fix").
         station_id, ac_sn = self._require_station()
         payload = await self._request_json(
             "PUT",
@@ -382,6 +463,11 @@ class SigenCloudClient:
 
     @staticmethod
     def _infer_active_phases(power_kw: float, current_a: float, voltage_v: float) -> int:
+        """Estimate active phase count from P ≈ N · I · V.
+
+        Assumes realtime ``chargingOutputCurrent`` is per-phase current (not total).
+        That assumption is unverified against Sigenergy docs; treat results as best-effort.
+        """
         if power_kw <= 0.05 or current_a <= 0.1 or voltage_v <= 0:
             return 0
         single_phase_w = current_a * voltage_v
@@ -437,13 +523,16 @@ class SigenCloudClient:
         )
 
     async def get_device_param(self) -> dict:
+        if self._cached_device_param is not None:
+            return self._cached_device_param
         station_id, ac_sn = self._require_station()
         payload = await self._request_json(
             "GET",
             "device/acevse/param",
             params={"stationId": station_id, "snCode": ac_sn},
         )
-        return payload.get("data") or {}
+        self._cached_device_param = payload.get("data") or {}
+        return self._cached_device_param
 
     async def get_more_setting(self) -> MoreSettingInfo | None:
         """Read advanced charger settings (Output Mode, DLM, etc.) from cloud."""
@@ -557,13 +646,42 @@ class SigenCloudClient:
             "Try stopping charging first, or confirm in the mySigen app."
         )
 
-    async def get_snapshot(self) -> EvacSnapshot:
-        status_code, status_label = await self.get_charge_status()
-        current = await self.get_ac_ev_current()
-        realtime = await self.get_realtime()
-        energy = await self.get_energy_totals()
-        more_setting = await self.get_more_setting()
-        param = await self.get_device_param()
+    async def get_snapshot(self, include_slow: bool = True) -> EvacSnapshot:
+        """Fetch a coherent EVAC state snapshot.
+
+        When ``include_slow`` is False, reuse the last cached energy / more_setting /
+        device_param values instead of refetching those slower endpoints.
+        """
+        if include_slow:
+            (
+                status_code_label,
+                current,
+                realtime,
+                energy,
+                more_setting,
+                param,
+            ) = await asyncio.gather(
+                self.get_charge_status(),
+                self.get_ac_ev_current(),
+                self.get_realtime(),
+                self.get_energy_totals(),
+                self.get_more_setting(),
+                self.get_device_param(),
+            )
+            status_code, status_label = status_code_label
+            self._cached_energy = energy
+            self._cached_more_setting = more_setting
+        else:
+            status_code_label, current, realtime = await asyncio.gather(
+                self.get_charge_status(),
+                self.get_ac_ev_current(),
+                self.get_realtime(),
+            )
+            status_code, status_label = status_code_label
+            energy = self._cached_energy
+            more_setting = self._cached_more_setting
+            param = self._cached_device_param or {}
+
         phase_mode = (
             MoreSettingInfo.decode_phase_mode(
                 more_setting.phase_type,
