@@ -1,0 +1,52 @@
+configuration:
+  modbus_host:
+    name: Modbus host
+    description: Hostname or IP of the inverter WiNet Modbus TCP interface (required).
+  modbus_port:
+    name: Modbus port
+    description: Modbus TCP port (usually 502).
+  modbus_unit_id:
+    name: Modbus unit ID
+    description: Modbus unit / slave ID of the inverter.
+  modbus_timeout_seconds:
+    name: Modbus timeout
+    description: Seconds to wait for a Modbus response before treating the request as failed.
+  poll_interval_seconds:
+    name: Poll interval
+    description: Seconds between fast-path register polls.
+  slow_poll_multiplier:
+    name: Slow poll multiplier
+    description: Poll slow read-only registers every N fast cycles.
+  allow_writes:
+    name: Allow writes
+    description: Master gate for writing holding registers. Keep off unless you intend to control the inverter.
+  enable_ems_writes:
+    name: Enable EMS writes
+    description: Allow EMS / export / charge-discharge writes. Requires Allow writes.
+  legacy_modqtt_compat:
+    name: Legacy ModQTT compatibility
+    description: Reuse old ModQTT unique IDs for selected sensors so entity history can continue.
+  mqtt_host:
+    name: MQTT host
+    description: MQTT broker hostname. Leave empty to use the Supervisor MQTT service.
+  mqtt_port:
+    name: MQTT port
+    description: MQTT broker port. Leave empty to use the Supervisor MQTT service.
+  mqtt_username:
+    name: MQTT username
+    description: MQTT username. Leave empty to use the Supervisor MQTT service.
+  mqtt_password:
+    name: MQTT password
+    description: MQTT password. Leave empty to use the Supervisor MQTT service.
+  mqtt_client_id:
+    name: MQTT client ID
+    description: Client ID used when connecting to the MQTT broker.
+  topic_prefix:
+    name: Topic prefix
+    description: Root MQTT topic for state, set, and availability messages.
+  device_name:
+    name: Device name
+    description: Friendly name shown for the inverter device in Home Assistant.
+  log_level:
+    name: Log level
+    description: Verbosity of add-on logs.

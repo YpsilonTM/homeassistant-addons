@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from pymodbus.client import ModbusTcpClient
+from pymodbus.pdu import ExceptionResponse
 
 from src.catalog import Register
 from src.decoder import encode_register
@@ -14,6 +16,14 @@ LOGGER = logging.getLogger(__name__)
 
 MAX_BATCH_WORDS = 125
 MIN_WRITE_INTERVAL_SECONDS = 1.0
+ILLEGAL_DATA_ADDRESS = 2
+UNSUPPORTED_AFTER_FAILURES = 3
+
+
+class ModbusReadError(RuntimeError):
+    def __init__(self, message: str, *, illegal_address: bool = False) -> None:
+        super().__init__(message)
+        self.illegal_address = illegal_address
 
 
 @dataclass
@@ -32,6 +42,8 @@ class ModbusReader:
     timeout_seconds: float
     unsupported_slugs: set[str] = field(default_factory=set)
     _last_write_monotonic: float = field(default=0.0, init=False)
+    _failure_counts: dict[str, int] = field(default_factory=dict, init=False)
+    _stop_event: threading.Event | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._client = ModbusTcpClient(
@@ -40,9 +52,19 @@ class ModbusReader:
             timeout=self.timeout_seconds,
         )
 
-    def connect_with_backoff(self, max_delay_seconds: float = 30.0) -> None:
+    def set_stop_event(self, stop_event: threading.Event | None) -> None:
+        self._stop_event = stop_event
+
+    def connect_with_backoff(
+        self,
+        stop: threading.Event | None = None,
+        max_delay_seconds: float = 30.0,
+    ) -> None:
         delay = 1.0
+        stop_event = stop if stop is not None else self._stop_event
         while not self._client.connected:
+            if stop_event is not None and stop_event.is_set():
+                raise RuntimeError("modbus_connect_aborted")
             if self._client.connect():
                 LOGGER.info("modbus_connected host=%s port=%s", self.host, self.port)
                 return
@@ -52,7 +74,11 @@ class ModbusReader:
                 self.port,
                 delay,
             )
-            time.sleep(delay)
+            if stop_event is not None:
+                if stop_event.wait(delay):
+                    raise RuntimeError("modbus_connect_aborted")
+            else:
+                time.sleep(delay)
             delay = min(delay * 2, max_delay_seconds)
 
     def close(self) -> None:
@@ -77,11 +103,14 @@ class ModbusReader:
                 device_id=self.unit_id,
             )
 
-        if response.isError():
-            raise RuntimeError(
+        if isinstance(response, ExceptionResponse) or response.isError():
+            exception_code = getattr(response, "exception_code", None)
+            illegal = exception_code == ILLEGAL_DATA_ADDRESS
+            raise ModbusReadError(
                 "Modbus read failed "
                 f"type={register_type} wire_address={wire_address} count={count} "
-                f"response={response}"
+                f"response={response}",
+                illegal_address=illegal,
             )
         return [int(word) & 0xFFFF for word in response.registers]
 
@@ -120,6 +149,37 @@ class ModbusReader:
         batches.append(current)
         return batches
 
+    def _mark_unsupported(self, register: Register, *, reason: str) -> None:
+        self.unsupported_slugs.add(register.slug)
+        self._failure_counts.pop(register.slug, None)
+        LOGGER.warning(
+            "modbus_register_unsupported slug=%s doc_address=%s wire=%s reason=%s",
+            register.slug,
+            register.address,
+            register.wire_address,
+            reason,
+        )
+
+    def _handle_single_failure(self, register: Register, error: ModbusReadError) -> None:
+        if error.illegal_address:
+            self._mark_unsupported(register, reason="illegal_address")
+            return
+
+        count = self._failure_counts.get(register.slug, 0) + 1
+        self._failure_counts[register.slug] = count
+        if count >= UNSUPPORTED_AFTER_FAILURES:
+            self._mark_unsupported(register, reason=f"consecutive_failures={count}")
+            return
+        LOGGER.warning(
+            "modbus_register_transient slug=%s doc_address=%s wire=%s failures=%s/%s error=%s",
+            register.slug,
+            register.address,
+            register.wire_address,
+            count,
+            UNSUPPORTED_AFTER_FAILURES,
+            error,
+        )
+
     def _read_batch(self, batch: _Batch) -> dict[str, list[int]]:
         values: dict[str, list[int]] = {}
         try:
@@ -127,17 +187,11 @@ class ModbusReader:
             for register in batch.registers:
                 offset = register.wire_address - batch.start
                 values[register.slug] = raw[offset : offset + register.length_words]
+                self._failure_counts.pop(register.slug, None)
             return values
-        except RuntimeError:
+        except ModbusReadError as error:
             if len(batch.registers) == 1:
-                register = batch.registers[0]
-                self.unsupported_slugs.add(register.slug)
-                LOGGER.warning(
-                    "modbus_register_unsupported slug=%s doc_address=%s wire=%s",
-                    register.slug,
-                    register.address,
-                    register.wire_address,
-                )
+                self._handle_single_failure(batch.registers[0], error)
                 return {}
             LOGGER.warning(
                 "modbus_batch_failed type=%s start=%s count=%s; retrying individually",

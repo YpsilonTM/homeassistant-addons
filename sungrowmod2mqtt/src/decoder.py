@@ -111,12 +111,22 @@ def encode_register(register: Register, value: float | int | str) -> list[int]:
 
     raw_value = int(round(numeric / register.scale))
 
+    if register.data_type in {"u16", "u32"} and raw_value < 0:
+        raise ValueError(
+            f"Negative raw value {raw_value} not allowed for {register.data_type} "
+            f"register {register.slug}"
+        )
+
     if register.data_type == "u16":
-        packed = struct.pack(">H", raw_value & 0xFFFF)
+        if raw_value > 0xFFFF:
+            raise ValueError(f"Value out of u16 range for {register.slug}: {raw_value}")
+        packed = struct.pack(">H", raw_value)
     elif register.data_type == "s16":
         packed = struct.pack(">h", raw_value)
     elif register.data_type == "u32":
-        packed = struct.pack(">I", raw_value & 0xFFFFFFFF)
+        if raw_value > 0xFFFFFFFF:
+            raise ValueError(f"Value out of u32 range for {register.slug}: {raw_value}")
+        packed = struct.pack(">I", raw_value)
     elif register.data_type == "s32":
         packed = struct.pack(">i", raw_value)
     else:

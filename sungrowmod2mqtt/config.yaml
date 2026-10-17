@@ -1,7 +1,7 @@
 name: Sungrow Modbus to MQTT
 slug: sungrowmod2mqtt
 description: Unofficial Sungrow hybrid inverter Modbus TCP → MQTT bridge. Not affiliated with Sungrow.
-version: 0.1.1
+version: 0.2.0
 image: ghcr.io/ypsilontm/homeassistant-addons/addon-sungrowmod2mqtt
 url: https://github.com/YpsilonTM/homeassistant-addons
 arch:
@@ -13,7 +13,7 @@ init: false
 services:
   - mqtt:want
 options:
-  modbus_host: "192.168.50.35"
+  modbus_host: ""
   modbus_port: 502
   modbus_unit_id: 1
   modbus_timeout_seconds: 10.0

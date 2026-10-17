@@ -83,7 +83,7 @@ def load_settings() -> Settings:
         slow_poll_multiplier=slow,
         allow_writes=allow_writes,
         enable_ems_writes=enable_ems,
-        legacy_modqtt_compat=_env_bool("LEGACY_MODQTT_COMPAT", True),
+        legacy_modqtt_compat=_env_bool("LEGACY_MODQTT_COMPAT", False),
         mqtt_host=_env("MQTT_HOST") or "core-mosquitto",
         mqtt_port=_env_int("MQTT_PORT", 1883),
         mqtt_username=_env("MQTT_USER", ""),

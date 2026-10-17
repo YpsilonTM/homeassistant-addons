@@ -7,45 +7,33 @@ if [ -f /usr/lib/bashio/bashio.sh ]; then
     source /usr/lib/bashio/bashio.sh
 fi
 
-if [ -f /data/options.json ]; then
-    eval "$({
-        python3 - <<'PY'
-import json
-import shlex
-from pathlib import Path
+if command -v bashio >/dev/null 2>&1 || declare -F bashio::config >/dev/null 2>&1; then
+    export MODBUS_HOST="$(bashio::config 'modbus_host')"
+    export MODBUS_PORT="$(bashio::config 'modbus_port')"
+    export MODBUS_UNIT_ID="$(bashio::config 'modbus_unit_id')"
+    export MODBUS_TIMEOUT_SECONDS="$(bashio::config 'modbus_timeout_seconds')"
+    export POLL_INTERVAL_SECONDS="$(bashio::config 'poll_interval_seconds')"
+    export SLOW_POLL_MULTIPLIER="$(bashio::config 'slow_poll_multiplier')"
+    export ALLOW_WRITES="$(bashio::config 'allow_writes')"
+    export ENABLE_EMS_WRITES="$(bashio::config 'enable_ems_writes')"
+    export LEGACY_MODQTT_COMPAT="$(bashio::config 'legacy_modqtt_compat')"
+    export MQTT_CLIENT_ID="$(bashio::config 'mqtt_client_id')"
+    export MQTT_TOPIC_PREFIX="$(bashio::config 'topic_prefix')"
+    export DEVICE_NAME="$(bashio::config 'device_name')"
+    export LOG_LEVEL="$(bashio::config 'log_level')"
 
-options_path = Path('/data/options.json')
-with options_path.open('r', encoding='utf-8') as fh:
-    options = json.load(fh)
-
-def opt(key, default=""):
-    value = options.get(key, default)
-    return "" if value is None else value
-
-env_map = {
-    'MODBUS_HOST': opt('modbus_host'),
-    'MODBUS_PORT': opt('modbus_port', 502),
-    'MODBUS_UNIT_ID': opt('modbus_unit_id', 1),
-    'MODBUS_TIMEOUT_SECONDS': opt('modbus_timeout_seconds', 10.0),
-    'POLL_INTERVAL_SECONDS': opt('poll_interval_seconds', 10.0),
-    'SLOW_POLL_MULTIPLIER': opt('slow_poll_multiplier', 6),
-    'ALLOW_WRITES': opt('allow_writes', False),
-    'ENABLE_EMS_WRITES': opt('enable_ems_writes', False),
-    'LEGACY_MODQTT_COMPAT': opt('legacy_modqtt_compat', True),
-    'MQTT_HOST': opt('mqtt_host'),
-    'MQTT_PORT': opt('mqtt_port'),
-    'MQTT_USER': opt('mqtt_username'),
-    'MQTT_PASS': opt('mqtt_password'),
-    'MQTT_CLIENT_ID': opt('mqtt_client_id', 'sungrowmod2mqtt-addon'),
-    'MQTT_TOPIC_PREFIX': opt('topic_prefix', 'sungrowmod2mqtt'),
-    'DEVICE_NAME': opt('device_name', 'Sungrow Inverter'),
-    'LOG_LEVEL': opt('log_level', 'INFO'),
-}
-
-for key, value in env_map.items():
-    print(f"export {key}={shlex.quote(str(value))}")
-PY
-    })"
+    if bashio::config.has_value 'mqtt_host'; then
+        export MQTT_HOST="$(bashio::config 'mqtt_host')"
+    fi
+    if bashio::config.has_value 'mqtt_port'; then
+        export MQTT_PORT="$(bashio::config 'mqtt_port')"
+    fi
+    if bashio::config.has_value 'mqtt_username'; then
+        export MQTT_USER="$(bashio::config 'mqtt_username')"
+    fi
+    if bashio::config.has_value 'mqtt_password'; then
+        export MQTT_PASS="$(bashio::config 'mqtt_password')"
+    fi
 fi
 
 # When MQTT options are empty/null, fall back to Supervisor MQTT service discovery.

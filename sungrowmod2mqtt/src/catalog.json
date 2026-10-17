@@ -190,7 +190,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -1037,7 +1037,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": true,
@@ -1077,7 +1077,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -1155,7 +1155,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -1193,7 +1193,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -1349,7 +1349,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -1485,7 +1485,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -1542,7 +1542,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -1601,7 +1601,7 @@
       "scale": 0.1,
       "unit": "kWh",
       "device_class": "energy",
-      "state_class": "total",
+      "state_class": "total_increasing",
       "platform": "sensor",
       "fast": false,
       "enabled_by_default": false,
@@ -2952,7 +2952,9 @@
       "enabled_by_default": false,
       "category": "ems",
       "ems_gated": true,
-      "decimals": 1
+      "decimals": 1,
+      "min_value": 0.0,
+      "max_value": 1000.0
     },
     {
       "slug": "max_charging_power",
@@ -2971,7 +2973,9 @@
       "enabled_by_default": false,
       "category": "ems",
       "ems_gated": true,
-      "decimals": 2
+      "decimals": 2,
+      "min_value": 0.0,
+      "max_value": 100.0
     },
     {
       "slug": "max_discharging_power",
@@ -2990,7 +2994,9 @@
       "enabled_by_default": false,
       "category": "ems",
       "ems_gated": true,
-      "decimals": 2
+      "decimals": 2,
+      "min_value": 0.0,
+      "max_value": 100.0
     },
     {
       "slug": "charge_discharge_power_wide",
@@ -3009,7 +3015,9 @@
       "enabled_by_default": false,
       "category": "ems",
       "ems_gated": true,
-      "decimals": 2
+      "decimals": 2,
+      "min_value": 0.0,
+      "max_value": 100.0
     },
     {
       "slug": "forced_charging",

@@ -25,16 +25,18 @@ Historical time-series blocks (addresses 6100–6826) are omitted from the catal
 
 | Option | Default | Notes |
 |--------|---------|-------|
-| `modbus_host` | `192.168.50.35` | Inverter / WiNet Modbus TCP host |
+| `modbus_host` | _(required)_ | Inverter / WiNet Modbus TCP host |
 | `modbus_port` | `502` | |
 | `modbus_unit_id` | `1` | |
 | `poll_interval_seconds` | `10` | Fast-path poll interval |
 | `slow_poll_multiplier` | `6` | Slow RO registers every N cycles |
 | `allow_writes` | `false` | Master write gate |
 | `enable_ems_writes` | `false` | EMS / export / charge-discharge (requires `allow_writes`) |
-| `legacy_modqtt_compat` | `false` | If true, reuse old ModQTT `sensor.sungrow_inverter_*` entity IDs |
+| `legacy_modqtt_compat` | `false` | If true, reuse old ModQTT `unique_id`s for selected sensors |
 | `topic_prefix` | `sungrowmod2mqtt` | State topics under this prefix |
 | MQTT host/user/pass | empty | Falls back to Supervisor MQTT service |
+
+Enable the add-on **Watchdog** toggle in the Supervisor so a stuck poll loop or long MQTT outage triggers an automatic restart.
 
 ## Topics
 
@@ -42,6 +44,8 @@ Historical time-series blocks (addresses 6100–6826) are omitted from the catal
 - `{prefix}/state` — JSON snapshot of core (enabled-by-default) values
 - `{prefix}/{slug}/state` — per-register state
 - `{prefix}/{slug}/set` — write requests (when writes enabled)
+
+Discovery uses a single retained device topic: `homeassistant/device/<device_id>/config`.
 
 ## Writes
 
@@ -58,6 +62,10 @@ Via WiNet, holding registers must not be polled densely; this add-on refreshes t
 5. Clear any leftover retained ModQTT discovery topics if old `sensor.sungrow_inverter_*` entities linger.
 
 Set `legacy_modqtt_compat: true` only if you need to keep the old `modqtt-addon_*` unique IDs and Energy Dashboard history without repointing.
+
+### Discovery migration (0.2.0+)
+
+On first start after upgrading to device-based discovery, the add-on migrates existing per-entity discovery topics once (marker under `/data`). Entity `unique_id`s are unchanged, so history is kept. Toggle `allow_writes` / `enable_ems_writes` to add or remove gated controls; hidden components are cleaned up automatically.
 
 ## Local development
 

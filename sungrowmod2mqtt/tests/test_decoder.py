@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from src.catalog import Register
 from src.decoder import (
     SENTINEL_S16,
@@ -87,6 +88,24 @@ def test_encode_roundtrip_u16_scaled() -> None:
     words = encode_register(reg, 87.5)
     assert words == [875]
     assert decode_register(words, reg) == 87.5
+
+
+def test_encode_rejects_negative_u16() -> None:
+    reg = _reg(data_type="u16", scale=1.0, access="RW", register_type="holding")
+    with pytest.raises(ValueError, match="Negative"):
+        encode_register(reg, -1)
+
+
+def test_encode_rejects_negative_u32() -> None:
+    reg = _reg(
+        data_type="u32",
+        scale=1.0,
+        length_words=2,
+        access="RW",
+        register_type="holding",
+    )
+    with pytest.raises(ValueError, match="Negative"):
+        encode_register(reg, -5)
 
 
 def test_words_to_bytes_endianness() -> None:

@@ -20,6 +20,9 @@ LOGGER = logging.getLogger(__name__)
 
 IDENTITY_SLUGS = ("device_type_code", "serial_number", "nominal_output_power", "inverter_firmware")
 STARTUP_BACKOFF_MAX_SECONDS = 60.0
+INVERTER_OFFLINE_AFTER_FAILURES = 3
+WATCHDOG_MQTT_DISCONNECT_SECONDS = 300.0
+WATCHDOG_POLL_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,12 @@ def parse_write_value(register: Register, payload: str) -> Any:
     return float(payload)
 
 
+def _values_equal(left: Any, right: Any) -> bool:
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return float(left) == float(right)
+    return left == right
+
+
 def _drain_writes(queue: asyncio.Queue[RegisterWrite]) -> dict[str, RegisterWrite]:
     pending: dict[str, RegisterWrite] = {}
     while True:
@@ -106,6 +115,26 @@ def read_identity(reader: ModbusReader, registers: list[Register]) -> dict[str, 
     wanted = [by_slug[slug] for slug in IDENTITY_SLUGS if slug in by_slug]
     words = reader.read_many(wanted)
     return decode_values(words, by_slug)
+
+
+async def read_identity_until_serial(
+    reader: ModbusReader,
+    registers: list[Register],
+    stop_event: asyncio.Event,
+) -> dict[str, Any] | None:
+    delay = 1.0
+    while not stop_event.is_set():
+        identity = await asyncio.to_thread(read_identity, reader, registers)
+        serial = identity.get("serial_number")
+        if isinstance(serial, str) and serial.strip():
+            return identity
+        LOGGER.warning("identity_serial_empty; retrying in %.1fs", delay)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=delay)
+            return None
+        except asyncio.TimeoutError:
+            delay = min(delay * 2, STARTUP_BACKOFF_MAX_SECONDS)
+    return None
 
 
 async def local_check(settings: Settings) -> int:
@@ -154,10 +183,40 @@ async def run_bridge(settings: Settings) -> int:
     thread_stop = threading.Event()
     loop = asyncio.get_running_loop()
     write_queue: asyncio.Queue[RegisterWrite] = asyncio.Queue()
+    exit_code = 0
+    last_cycle_at = time.monotonic()
+    mqtt: MqttBridge | None = None
+
+    def _request_stop() -> None:
+        stop_event.set()
+        thread_stop.set()
+
+    def _watchdog_loop() -> None:
+        nonlocal exit_code
+        while not thread_stop.wait(WATCHDOG_POLL_SECONDS):
+            stuck_limit = max(10 * settings.poll_interval_seconds, 300.0)
+            age = time.monotonic() - last_cycle_at
+            if age >= stuck_limit:
+                LOGGER.error("watchdog_exit reason=loop_stuck age=%.1fs limit=%.1fs", age, stuck_limit)
+                exit_code = 1
+                _request_stop()
+                return
+            bridge = mqtt
+            if bridge is None:
+                continue
+            mqtt_gap = bridge.disconnected_for_seconds()
+            if mqtt_gap >= WATCHDOG_MQTT_DISCONNECT_SECONDS:
+                LOGGER.error(
+                    "watchdog_exit reason=mqtt_disconnected age=%.1fs",
+                    mqtt_gap,
+                )
+                exit_code = 1
+                _request_stop()
+                return
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
-            loop.add_signal_handler(sig, stop_event.set)
+            loop.add_signal_handler(sig, _request_stop)
         except NotImplementedError:
             pass
 
@@ -167,28 +226,33 @@ async def run_bridge(settings: Settings) -> int:
         settings.modbus_unit_id,
         settings.modbus_timeout_seconds,
     )
+    reader.set_stop_event(thread_stop)
 
-    delay = 1.0
-    while not stop_event.is_set():
-        try:
-            await asyncio.to_thread(reader.connect_with_backoff)
-            break
-        except Exception:
-            LOGGER.exception("modbus_startup_failed; retrying in %.1fs", delay)
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=delay)
-                reader.close()
-                return 0
-            except asyncio.TimeoutError:
-                delay = min(delay * 2, STARTUP_BACKOFF_MAX_SECONDS)
+    try:
+        await asyncio.to_thread(reader.connect_with_backoff, thread_stop)
+    except Exception as exc:
+        if thread_stop.is_set() or stop_event.is_set():
+            reader.close()
+            return 0
+        LOGGER.exception("modbus_startup_failed: %s", exc)
+        reader.close()
+        return 1
 
-    identity = await asyncio.to_thread(read_identity, reader, all_registers)
+    if stop_event.is_set():
+        reader.close()
+        return 0
+
+    identity = await read_identity_until_serial(reader, all_registers, stop_event)
+    if identity is None or stop_event.is_set():
+        reader.close()
+        return 0
+
     device_code_raw = identity.get("device_type_code")
     device_code = int(device_code_raw) if isinstance(device_code_raw, (int, float)) else None
-    serial = identity.get("serial_number") or "unknown"
+    serial = str(identity["serial_number"]).strip()
     model = model_name(device_codes, device_code) or "Hybrid Inverter"
     firmware = identity.get("inverter_firmware")
-    device_id = f"sungrow_{serial}" if serial != "unknown" else "sungrow"
+    device_id = f"sungrow_{serial}"
 
     active = filter_registers(all_registers, device_code=device_code)
     by_slug = registers_by_slug(active)
@@ -221,19 +285,39 @@ async def run_bridge(settings: Settings) -> int:
 
     mqtt.set_write_handler(on_set)
 
+    last_values: dict[str, Any] = dict(identity)
+
+    def on_mqtt_reconnect() -> None:
+        # Publish cache was cleared in MqttBridge; republish current values once.
+        def _republish() -> None:
+            if not last_values:
+                return
+            try:
+                mqtt.publish_values(last_values)
+            except Exception:
+                LOGGER.exception("republish_after_reconnect_failed")
+
+        loop.call_soon_threadsafe(_republish)
+
+    mqtt.set_reconnect_handler(on_mqtt_reconnect)
+
     await asyncio.to_thread(mqtt.connect_with_backoff, thread_stop)
     if stop_event.is_set():
         mqtt.disconnect()
         reader.close()
         return 0
 
-    mqtt.publish_discovery()
-
-    last_values: dict[str, Any] = dict(identity)
-    poll_cycle = 0
-    last_holding_refresh = 0.0
-
     try:
+        mqtt.publish_discovery()
+
+        poll_cycle = 0
+        last_holding_refresh = 0.0
+        consecutive_failures = 0
+        marked_offline = False
+        last_cycle_at = time.monotonic()
+        watchdog = threading.Thread(target=_watchdog_loop, name="sungrow-watchdog", daemon=True)
+        watchdog.start()
+
         while not stop_event.is_set():
             cycle_start = time.monotonic()
             pending = _drain_writes(write_queue)
@@ -247,8 +331,15 @@ async def run_bridge(settings: Settings) -> int:
                     continue
                 try:
                     value = parse_write_value(register, command.value)
+                    previous = last_values.get(slug)
+                    if previous is not None and _values_equal(previous, value):
+                        LOGGER.debug(
+                            "write_dedup_skip slug=%s value=%r",
+                            slug,
+                            value,
+                        )
+                        continue
                     await asyncio.to_thread(reader.write_register, register, value)
-                    # Refresh written register
                     words = await asyncio.to_thread(reader.read_many, [register])
                     decoded = decode_values(words, by_slug)
                     last_values.update(decoded)
@@ -266,9 +357,6 @@ async def run_bridge(settings: Settings) -> int:
                 include_slow=include_slow,
                 include_holding=include_holding and settings.allow_writes,
             )
-            # Always poll RO; holding only when allow_writes (to show current settings)
-            # or on the holding refresh cadence even without writes for diagnostics? Plan says
-            # holding sparsely. When writes off, skip holding entirely.
             if not settings.allow_writes:
                 selected = [reg for reg in selected if reg.register_type == "input"]
 
@@ -279,14 +367,22 @@ async def run_bridge(settings: Settings) -> int:
                 mqtt.publish_values(last_values)
                 if include_holding:
                     last_holding_refresh = time.monotonic()
+                consecutive_failures = 0
+                if marked_offline:
+                    mqtt.publish_availability(True)
+                    marked_offline = False
             except Exception:
                 LOGGER.exception("poll_failed")
-                try:
-                    mqtt.publish_availability(False)
-                except Exception:
-                    pass
+                consecutive_failures += 1
+                if consecutive_failures >= INVERTER_OFFLINE_AFTER_FAILURES and not marked_offline:
+                    try:
+                        mqtt.publish_availability(False)
+                        marked_offline = True
+                    except Exception:
+                        LOGGER.exception("availability_offline_publish_failed")
 
             poll_cycle += 1
+            last_cycle_at = time.monotonic()
             elapsed = time.monotonic() - cycle_start
             sleep_for = max(0.1, settings.poll_interval_seconds - elapsed)
             try:
@@ -297,7 +393,7 @@ async def run_bridge(settings: Settings) -> int:
         thread_stop.set()
         mqtt.disconnect()
         reader.close()
-    return 0
+    return exit_code
 
 
 def main() -> int:
