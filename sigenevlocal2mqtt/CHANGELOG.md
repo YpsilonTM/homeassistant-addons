@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Fix boot crash: load options from `/data/options.json` again. `bashio::config` was forbidden on Supervisor API and left `CHARGER_HOST` empty.
+
 ## 0.2.0
 
 - Switch to MQTT **device discovery** (`homeassistant/device/<id>/config`) with a one-time migration that keeps existing entity IDs and history
@@ -10,7 +14,6 @@
 - Mark `session_energy` as `state_class: total_increasing`
 - NearTerminal: frame buffer + sequence matching, silent single retry on no-reply, quieter poll errors
 - Per-tag write error handling, RW write dedup, publish-on-change retained MQTT cache
-- `run.sh` uses `bashio::config` / `bashio::config.has_value` (Supervisor MQTT fallback kept)
 - Self-watchdog exits on stalled loop or long MQTT outage — enable Supervisor Watchdog
 - Add `translations/en.yaml`, `icon.png`, `logo.png`; scrub example IPs/serials; drop `uv.lock`
 

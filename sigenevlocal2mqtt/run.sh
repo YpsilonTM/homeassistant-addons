@@ -2,46 +2,65 @@
 set -euo pipefail
 
 # Home Assistant base image ships bashio; source it when present (local runs may skip).
+# Options are read from /data/options.json (always mounted). bashio::config hits the
+# Supervisor API and can fail with "forbidden" on some installs — do not use it here.
 if [ -f /usr/lib/bashio/bashio.sh ]; then
     # shellcheck disable=SC1091
     source /usr/lib/bashio/bashio.sh
 fi
 
-if command -v bashio >/dev/null 2>&1 || declare -F bashio::config >/dev/null 2>&1; then
-    export CHARGER_HOST="$(bashio::config 'charger_host')"
-    export CHARGER_PORT="$(bashio::config 'charger_port')"
-    export POLL_INTERVAL_SECONDS="$(bashio::config 'poll_interval_seconds')"
-    export SLOW_POLL_MULTIPLIER="$(bashio::config 'slow_poll_multiplier')"
-    export MIN_CURRENT="$(bashio::config 'min_current')"
-    export MAX_CURRENT="$(bashio::config 'max_current')"
-    export ENABLE_DANGEROUS_COMMANDS="$(bashio::config 'enable_dangerous_commands')"
-    export MQTT_CLIENT_ID="$(bashio::config 'mqtt_client_id')"
-    export MQTT_TOPIC_PREFIX="$(bashio::config 'topic_prefix')"
-    export DEVICE_NAME="$(bashio::config 'device_name')"
-    export LOG_LEVEL="$(bashio::config 'log_level')"
+if [ -f /data/options.json ]; then
+    eval "$({
+        python3 - <<'PY'
+import json
+import shlex
+from pathlib import Path
 
-    if bashio::config.has_value 'mqtt_host'; then
-        export MQTT_HOST="$(bashio::config 'mqtt_host')"
-    elif bashio::services.available "mqtt" 2>/dev/null; then
-        export MQTT_HOST="$(bashio::services mqtt 'host')"
+options_path = Path('/data/options.json')
+with options_path.open('r', encoding='utf-8') as fh:
+    options = json.load(fh)
+
+def opt(key, default=""):
+    value = options.get(key, default)
+    return "" if value is None else value
+
+env_map = {
+    'CHARGER_HOST': opt('charger_host'),
+    'CHARGER_PORT': opt('charger_port', 21319),
+    'POLL_INTERVAL_SECONDS': opt('poll_interval_seconds', 5),
+    'SLOW_POLL_MULTIPLIER': opt('slow_poll_multiplier', 4),
+    'MIN_CURRENT': opt('min_current', 6),
+    'MAX_CURRENT': opt('max_current', 16),
+    'ENABLE_DANGEROUS_COMMANDS': opt('enable_dangerous_commands', False),
+    'MQTT_HOST': opt('mqtt_host'),
+    'MQTT_PORT': opt('mqtt_port'),
+    'MQTT_USER': opt('mqtt_username'),
+    'MQTT_PASS': opt('mqtt_password'),
+    'MQTT_CLIENT_ID': opt('mqtt_client_id', 'sigenevlocal2mqtt-addon'),
+    'MQTT_TOPIC_PREFIX': opt('topic_prefix', 'sigen_evac_local'),
+    'DEVICE_NAME': opt('device_name', 'Sigen EV AC Local'),
+    'LOG_LEVEL': opt('log_level', 'INFO'),
+}
+
+for key, value in env_map.items():
+    print(f"export {key}={shlex.quote(str(value))}")
+PY
+    })"
+fi
+
+# When MQTT options are empty/null, fall back to Supervisor MQTT service discovery.
+if command -v bashio >/dev/null 2>&1 || declare -F bashio::services.available >/dev/null 2>&1; then
+    if [ -z "${MQTT_HOST:-}" ] && bashio::services.available "mqtt" 2>/dev/null; then
+        export MQTT_HOST="$(bashio::services mqtt "host")"
     fi
-
-    if bashio::config.has_value 'mqtt_port'; then
-        export MQTT_PORT="$(bashio::config 'mqtt_port')"
-    elif bashio::services.available "mqtt" 2>/dev/null; then
-        export MQTT_PORT="$(bashio::services mqtt 'port')"
+    if [ -z "${MQTT_PORT:-}" ] && bashio::services.available "mqtt" 2>/dev/null; then
+        export MQTT_PORT="$(bashio::services mqtt "port")"
     fi
-
-    if bashio::config.has_value 'mqtt_username'; then
-        export MQTT_USER="$(bashio::config 'mqtt_username')"
-    elif bashio::services.available "mqtt" 2>/dev/null; then
-        export MQTT_USER="$(bashio::services mqtt 'username')"
+    if [ -z "${MQTT_USER:-}" ] && bashio::services.available "mqtt" 2>/dev/null; then
+        export MQTT_USER="$(bashio::services mqtt "username")"
     fi
-
-    if bashio::config.has_value 'mqtt_password'; then
-        export MQTT_PASS="$(bashio::config 'mqtt_password')"
-    elif bashio::services.available "mqtt" 2>/dev/null; then
-        export MQTT_PASS="$(bashio::services mqtt 'password')"
+    if [ -z "${MQTT_PASS:-}" ] && bashio::services.available "mqtt" 2>/dev/null; then
+        export MQTT_PASS="$(bashio::services mqtt "password")"
     fi
 fi
 

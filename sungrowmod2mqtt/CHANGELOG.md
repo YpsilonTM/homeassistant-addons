@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Fix boot crash: load options from `/data/options.json` again. `bashio::config` was forbidden on Supervisor API and left `MODBUS_HOST` empty.
+
 ## 0.2.0
 
 - Recover MQTT availability after poll failures (publish `online` again once polling succeeds).
@@ -11,7 +15,7 @@
 - Self-watchdog exits non-zero on a stuck poll loop or long MQTT outage (enable the Supervisor Watchdog toggle).
 - `daily_*` energy sensors use `state_class: total_increasing`; number entity `step` uses register scale.
 - Bounds on wide charge/discharge power and charge-cutoff voltage registers; reject negative `u16`/`u32` encodes.
-- `legacy_modqtt_compat` defaults to `false`; bashio-based `run.sh`; English option translations; icon/logo.
+- `legacy_modqtt_compat` defaults to `false`; English option translations; icon/logo.
 
 ## 0.1.1
 
