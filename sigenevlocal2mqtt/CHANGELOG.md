@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Fix GHCR image path after the repo rename (`hassaddons` → `homeassistant-addons`) so Supervisor can pull the public package
+
 ## 0.1.0
 
 - Initial local NearTerminal bridge for standalone Sigen EV AC
