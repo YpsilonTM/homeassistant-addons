@@ -3,10 +3,10 @@
 ## Real Hardware Testing Results (2026-05-26)
 
 ### Successful Charge Cycle Captured
-Successfully connected SIGEN EVAC 11 4G T2 WH (Serial: 120A64150210) and performed a full charge cycle with bridge commands.
+Successfully connected SIGEN EVAC 11 4G T2 WH (Serial: SERIAL0000001) and performed a full charge cycle with bridge commands.
 
 **Timeline:**
-- **09:54:10** — Charger connected via WebSocket `/120A64150210`
+- **09:54:10** — Charger connected via WebSocket `/SERIAL0000001`
 - **09:55:00** — Bridge sent `RemoteStartTransaction` → Accepted
 - **09:55:09** — Charger status changed to "Charging"
 - **09:55:10 - 09:56:10** — Multiple `MeterValues` messages during charge
@@ -17,7 +17,7 @@ Successfully connected SIGEN EVAC 11 4G T2 WH (Serial: 120A64150210) and perform
 - **Vendor:** SIGEN
 - **Model:** EVAC 11 4G T2 WH
 - **Firmware:** V100R001C10SPC113B055C1
-- **Serial Number:** 120A64150210
+- **Serial Number:** SERIAL0000001
 
 ### MeterValues Data Structure (Key Observations)
 ```json
@@ -178,6 +178,6 @@ If SIGEN requires a different key, override on set-power command:
 ## Terminal Session
 **Active Bridge:** Terminal ID `6b4d0619-b4cc-49fe-820c-46f3561477a2`
 - Running locally at 0.0.0.0:9200
-- Connected to MQTT at 192.168.50.11:1883
+- Connected to MQTT at 192.0.2.10:1883
 - DEBUG logging enabled
 - Charger can reconnect anytime

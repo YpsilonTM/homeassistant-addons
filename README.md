@@ -33,6 +33,10 @@ One git repository = one HA add-on **store** (`repository.yaml` at the root). Ea
 
 See [docs/REPOSITORY.md](docs/REPOSITORY.md) for structure and [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for maintainer notes.
 
+## License
+
+This repository is licensed under the [MIT License](LICENSE).
+
 ## Metadata
 
 Store metadata: [repository.yaml](repository.yaml)

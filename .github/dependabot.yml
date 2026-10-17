@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /sigenevlocal2mqtt
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: /sungrowmod2mqtt
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /sigenevlocal2mqtt
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /sungrowmod2mqtt
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
