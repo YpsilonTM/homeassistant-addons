@@ -9,6 +9,7 @@ from typing import Any
 from paho.mqtt import client as mqtt
 
 from src.catalog import Tag
+from src.enums import encode_enum, enum_options
 
 LOGGER = logging.getLogger(__name__)
 
@@ -201,9 +202,13 @@ class MqttBridge:
         return f"{value:.2f}"
 
     @classmethod
-    def format_state(cls, value: Any) -> str:
+    def format_state(cls, value: Any, tag_id: int | None = None) -> str:
         if value is None:
             return ""
+        if tag_id is not None:
+            named = encode_enum(tag_id, value)
+            if named is not None:
+                return named
         if isinstance(value, float):
             return cls._num(value)
         return str(value)
@@ -213,7 +218,7 @@ class MqttBridge:
             tag = self.tags_by_id.get(tag_id)
             if tag is None:
                 continue
-            self.publish(self.tag_state_topic(tag), self.format_state(value), retain=True)
+            self.publish(self.tag_state_topic(tag), self.format_state(value, tag_id), retain=True)
 
         current = values.get(CURRENT_TAG)
         if isinstance(current, (int, float)):
@@ -238,7 +243,7 @@ class MqttBridge:
 
         run_state = values.get(RUN_STATE_TAG)
         if run_state is not None:
-            self.publish(self.status_topic, str(run_state), retain=True)
+            self.publish(self.status_topic, self.format_state(run_state, RUN_STATE_TAG), retain=True)
 
         self.publish(self.active_phases_topic, str(active_phases(values)), retain=True)
         self.publish(self.state_topic, json.dumps(self._state_bundle(values)), retain=True)
@@ -248,11 +253,14 @@ class MqttBridge:
         for tag in self.tags:
             if not tag.enabled_by_default or tag.secret or tag.id not in values:
                 continue
-            featured[tag.slug] = values[tag.id]
+            named = encode_enum(tag.id, values[tag.id])
+            featured[tag.slug] = named if named is not None else values[tag.id]
         power_kw = values.get(POWER_TAG)
         current = values.get(CURRENT_TAG)
+        status = values.get(RUN_STATE_TAG)
+        status_named = encode_enum(RUN_STATE_TAG, status) if status is not None else None
         return {
-            "status": values.get(RUN_STATE_TAG),
+            "status": status_named if status_named is not None else status,
             "power_w": round(float(power_kw) * 1000, 1) if isinstance(power_kw, (int, float)) else None,
             "current_a": values.get(11213),
             "voltage_v": values.get(VOLTAGE_TAG),
@@ -343,6 +351,8 @@ class MqttBridge:
                     "state_topic": self.status_topic,
                     "availability": [availability],
                     "entity_category": "diagnostic",
+                    "device_class": "enum",
+                    "options": enum_options(RUN_STATE_TAG) or [],
                     "device": device,
                 },
             ),
@@ -406,6 +416,7 @@ class MqttBridge:
             payload["state_class"] = "measurement"
 
         platform = tag.platform
+        options = enum_options(tag.id)
         if tag.id == CURRENT_TAG:
             payload.update(
                 {
@@ -422,6 +433,28 @@ class MqttBridge:
             )
             payload.pop("state_class", None)
             return f"homeassistant/number/{unique_id}/config", payload
+
+        if options is not None and tag.writable:
+            payload.update(
+                {
+                    "command_topic": self.tag_set_topic(tag),
+                    "state_topic": self.tag_state_topic(tag),
+                    "options": options,
+                    "entity_category": "config",
+                }
+            )
+            payload.pop("unit_of_measurement", None)
+            payload.pop("device_class", None)
+            payload.pop("state_class", None)
+            return f"homeassistant/select/{unique_id}/config", payload
+
+        if options is not None:
+            payload["state_topic"] = self.tag_state_topic(tag)
+            payload["device_class"] = "enum"
+            payload["options"] = options
+            payload.pop("unit_of_measurement", None)
+            payload.pop("state_class", None)
+            return f"homeassistant/sensor/{unique_id}/config", payload
 
         if platform == "sensor":
             payload["state_topic"] = self.tag_state_topic(tag)

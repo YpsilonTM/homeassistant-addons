@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Mode / status enums publish names instead of raw flags (`auth_mode`, `work_mode`, `control_mode`, `output_mode`, `dlm_enable`, `run_state`, `plug_status`, …)
+- RW enums become MQTT `select` entities; RO enums use `device_class: enum`
+- After updating, remove leftover `number.*` mode entities from the HA entity registry if they remain beside the new selects
+
 ## 0.1.2
 
 - Translate remaining Chinese entity names to English (grid frequency, Wi‑Fi/cloud status, relays, schedules, …)

@@ -11,6 +11,7 @@ from typing import Any
 
 from src.catalog import Tag, load_catalog
 from src.config import UNOFFICIAL_NOTICE, Settings, load_settings
+from src.enums import decode_enum
 from src.mqtt_bridge import CURRENT_TAG, START_STOP_TAG, START_VALUE, STOP_VALUE, MqttBridge
 from src.near import NearClient
 
@@ -75,6 +76,9 @@ def parse_write_value(tag: Tag, payload: str) -> Any:
         return payload
     if tag.dtype == "bytes":
         return payload
+    named = decode_enum(tag.id, payload)
+    if named is not None:
+        return named
     return float(payload)
 
 

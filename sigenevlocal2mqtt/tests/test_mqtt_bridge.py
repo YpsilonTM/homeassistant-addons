@@ -128,6 +128,8 @@ def test_publish_values(bridge: MqttBridge) -> None:
             11210: 230.76,
             11350: 1154.29,
             11265: 0,
+            12106: 1,
+            12520: 0,
         }
     )
     client: FakeMqttClient = bridge._client  # type: ignore[assignment]
@@ -137,6 +139,23 @@ def test_publish_values(bridge: MqttBridge) -> None:
     assert by_topic["sigen_evac_local/active_phases"] == "2"
     assert by_topic["sigen_evac_local/lifetime_energy_kwh"] == "1154.29"
     assert by_topic["sigen_evac_local/tag/12194/state"] == "8"
+    assert by_topic["sigen_evac_local/status"] == "unplugged"
+    assert by_topic["sigen_evac_local/tag/11265/state"] == "unplugged"
+    assert by_topic["sigen_evac_local/tag/12106/state"] == "authentication"
+    assert by_topic["sigen_evac_local/tag/12520/state"] == "1_phase"
+
+
+def test_discovery_enum_selects(bridge: MqttBridge) -> None:
+    bridge.publish_discovery()
+    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
+    by_topic = {topic: json.loads(payload) for topic, payload, _ in client.published if payload}
+    auth = by_topic[f"homeassistant/select/{bridge.device_id}_auth_mode/config"]
+    assert auth["options"] == ["auto_charge", "authentication"]
+    run = by_topic[f"homeassistant/sensor/{bridge.device_id}_run_state/config"]
+    assert run["device_class"] == "enum"
+    assert "charging" in run["options"]
+    status = by_topic[f"homeassistant/sensor/{bridge.device_id}_status/config"]
+    assert status["options"][0] == "unplugged"
 
 
 def test_active_phases() -> None:

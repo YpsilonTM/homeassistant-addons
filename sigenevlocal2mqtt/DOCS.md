@@ -42,7 +42,7 @@ Prefix default: `sigen_evac_local`
 |-------|-----------|---------|
 | `{prefix}/availability` | out | `online` / `offline` |
 | `{prefix}/state` | out | JSON snapshot of featured tags |
-| `{prefix}/status` | out | raw run-state (tag 11265) |
+| `{prefix}/status` | out | named run-state (tag 11265), e.g. `unplugged` / `charging` |
 | `{prefix}/power_w` | out | watts (from tag 11220 kW) |
 | `{prefix}/current_a` | out | phase-A amps |
 | `{prefix}/voltage_v` | out | phase-A volts |
@@ -51,8 +51,21 @@ Prefix default: `sigen_evac_local`
 | `{prefix}/current/state` | out | charge-current setpoint |
 | `{prefix}/current/set` | in | charge-current setpoint (amps) |
 | `{prefix}/command` | in | `START` / `STOP` |
-| `{prefix}/tag/{id}/state` | out | decoded value for catalog tag `id` |
-| `{prefix}/tag/{id}/set` | in | write that tag (RW/CMD only) |
+| `{prefix}/tag/{id}/state` | out | decoded value for catalog tag `id` (named for known enums) |
+| `{prefix}/tag/{id}/set` | in | write that tag (RW/CMD only; enum selects accept the option name or the raw int) |
+
+### Named mode values
+
+| Entity | Options |
+|--------|---------|
+| Auth mode | `auto_charge`, `authentication` |
+| Work mode | `fast_charging`, `green_charging`, `eco_charging` |
+| Control mode | `local`, `ocpp` |
+| Output mode | `1_phase`, `3_phase`, `3_phase_4wire`, `biphase` |
+| DLM enable | `off`, `on` |
+| Single-phase sequence | `L1`, `L2`, `L3`, `system_automatic` |
+| Run state | `unplugged`, `plugged`, `preparing`, `charging`, `fault`, `reserving`, `occupied_a`/`_b`/`_c`, `unavailable`, `offline` |
+| Plug status | `unplugged`, `plugged` |
 
 ## Safety
 

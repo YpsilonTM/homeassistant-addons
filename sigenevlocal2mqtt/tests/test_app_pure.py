@@ -49,6 +49,10 @@ def test_parse_write_value() -> None:
     assert parse_write_value(by_id[12194], "8") == 8.0
     assert parse_write_value(by_id[12001], "PRESS") == 1
     assert parse_write_value(by_id[12197], "ABC123") == "ABC123"
+    assert parse_write_value(by_id[12106], "authentication") == 1
+    assert parse_write_value(by_id[12106], "0") == 0
+    assert parse_write_value(by_id[12520], "3_phase") == 1
+    assert parse_write_value(by_id[12101], "eco_charging") == 2
 
 
 def test_readable_tags_fast_vs_slow() -> None:
