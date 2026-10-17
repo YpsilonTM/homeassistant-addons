@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Translate remaining Chinese entity names to English (grid frequency, Wi‑Fi/cloud status, relays, schedules, …)
+
 ## 0.1.1
 
 - Fix GHCR image path after the repo rename (`hassaddons` → `homeassistant-addons`) so Supervisor can pull the public package
