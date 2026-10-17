@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Default `device_name` is English (`Sungrow Inverter`) for public installs; override locally if desired.
+
 ## 0.1.0
 
 - Initial release: Sungrow residential hybrid inverter Modbus TCP → MQTT bridge.

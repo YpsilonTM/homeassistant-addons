@@ -90,7 +90,7 @@ def load_settings() -> Settings:
         mqtt_password=_env("MQTT_PASS", ""),
         mqtt_client_id=_env("MQTT_CLIENT_ID") or "sungrowmod2mqtt-addon",
         topic_prefix=_env("MQTT_TOPIC_PREFIX") or "sungrowmod2mqtt",
-        device_name=_env("DEVICE_NAME") or "Omvormer Zonnepanelen",
+        device_name=_env("DEVICE_NAME") or "Sungrow Inverter",
         log_level=log_level,
     )
 

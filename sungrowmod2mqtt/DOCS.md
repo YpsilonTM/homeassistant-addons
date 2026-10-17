@@ -32,7 +32,7 @@ Historical time-series blocks (addresses 6100–6826) are omitted from the catal
 | `slow_poll_multiplier` | `6` | Slow RO registers every N cycles |
 | `allow_writes` | `false` | Master write gate |
 | `enable_ems_writes` | `false` | EMS / export / charge-discharge (requires `allow_writes`) |
-| `legacy_modqtt_compat` | `true` | Keep existing `sensor.sungrow_inverter_*` entity IDs |
+| `legacy_modqtt_compat` | `false` | If true, reuse old ModQTT `sensor.sungrow_inverter_*` entity IDs |
 | `topic_prefix` | `sungrowmod2mqtt` | State topics under this prefix |
 | MQTT host/user/pass | empty | Falls back to Supervisor MQTT service |
 
@@ -51,15 +51,13 @@ Via WiNet, holding registers must not be polled densely; this add-on refreshes t
 
 ## Migrating from ModQTT
 
-If you currently use ModQTT with Sungrow discovery:
+1. Install this add-on (`legacy_modqtt_compat` defaults to `false` for a clean entity set).
+2. **Stop ModQTT** so two Modbus clients do not compete.
+3. Start **Sungrow Modbus to MQTT**.
+4. Repoint Energy Dashboard / automations to the new entities (names derive from `device_name`, e.g. `sensor.sungrow_inverter_*`).
+5. Clear any leftover retained ModQTT discovery topics if old `sensor.sungrow_inverter_*` entities linger.
 
-1. Install this add-on; leave `legacy_modqtt_compat: true`.
-2. Prefer a read-only check first (local `--local-check` or start with writes disabled).
-3. **Stop ModQTT** (do not uninstall yet) so two Modbus clients do not compete.
-4. Start **Sungrow Modbus to MQTT**.
-5. Confirm Energy Dashboard solar sensors (`sensor.sungrow_inverter_total_pv_generation`, `sensor.sungrow_inverter_total_dc_power`) keep updating with history intact.
-
-With compatibility enabled, discovery for the 22 previous ModQTT sensors reuses `unique_id` values `modqtt-addon_{suffix}` so Home Assistant updates those entities in place. New registers use `sungrow_{serial}_{slug}` unique IDs.
+Set `legacy_modqtt_compat: true` only if you need to keep the old `modqtt-addon_*` unique IDs and Energy Dashboard history without repointing.
 
 ## Local development
 

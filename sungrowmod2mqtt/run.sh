@@ -38,7 +38,7 @@ env_map = {
     'MQTT_PASS': opt('mqtt_password'),
     'MQTT_CLIENT_ID': opt('mqtt_client_id', 'sungrowmod2mqtt-addon'),
     'MQTT_TOPIC_PREFIX': opt('topic_prefix', 'sungrowmod2mqtt'),
-    'DEVICE_NAME': opt('device_name', 'Omvormer Zonnepanelen'),
+    'DEVICE_NAME': opt('device_name', 'Sungrow Inverter'),
     'LOG_LEVEL': opt('log_level', 'INFO'),
 }
 

@@ -28,7 +28,7 @@ class MqttBridge:
         username: str = "",
         password: str = "",
         topic_prefix: str = "sungrowmod2mqtt",
-        device_name: str = "Omvormer Zonnepanelen",
+        device_name: str = "Sungrow Inverter",
         device_id: str = "sungrow",
         allow_writes: bool = False,
         enable_ems_writes: bool = False,

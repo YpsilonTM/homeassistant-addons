@@ -1,7 +1,7 @@
 name: Sungrow Modbus to MQTT
 slug: sungrowmod2mqtt
 description: Unofficial Sungrow hybrid inverter Modbus TCP → MQTT bridge. Not affiliated with Sungrow.
-version: 0.1.0
+version: 0.1.1
 image: ghcr.io/ypsilontm/homeassistant-addons/addon-sungrowmod2mqtt
 url: https://github.com/YpsilonTM/homeassistant-addons
 arch:
@@ -21,14 +21,14 @@ options:
   slow_poll_multiplier: 6
   allow_writes: false
   enable_ems_writes: false
-  legacy_modqtt_compat: true
+  legacy_modqtt_compat: false
   mqtt_host: null
   mqtt_port: null
   mqtt_username: null
   mqtt_password: null
   mqtt_client_id: sungrowmod2mqtt-addon
   topic_prefix: sungrowmod2mqtt
-  device_name: Omvormer Zonnepanelen
+  device_name: Sungrow Inverter
   log_level: INFO
 schema:
   modbus_host: str
