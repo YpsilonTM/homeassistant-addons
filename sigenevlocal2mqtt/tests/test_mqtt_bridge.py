@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -49,14 +50,13 @@ class FakeMqttClient:
         return SimpleNamespace(rc=0)
 
 
-@pytest.fixture
-def bridge(monkeypatch: pytest.MonkeyPatch) -> MqttBridge:
+def _bridge(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **kwargs) -> MqttBridge:
     import src.mqtt_bridge as mb
 
     monkeypatch.setattr(mb.mqtt, "Client", FakeMqttClient)
     monkeypatch.setattr(mb.mqtt, "MQTT_ERR_SUCCESS", 0)
     tags = load_catalog()
-    instance = MqttBridge(
+    options = dict(
         host="localhost",
         port=1883,
         client_id="test-client",
@@ -66,9 +66,26 @@ def bridge(monkeypatch: pytest.MonkeyPatch) -> MqttBridge:
         device_id="sigen_evac_local_SN1",
         min_current=6,
         max_current=16,
+        migration_marker=tmp_path / "device_discovery_migrated",
     )
+    options.update(kwargs)
+    instance = MqttBridge(**options)
     instance._connected.set()
     return instance
+
+
+@pytest.fixture
+def bridge(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> MqttBridge:
+    return _bridge(monkeypatch, tmp_path)
+
+
+def _device_payload(bridge: MqttBridge) -> dict:
+    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
+    topic = f"homeassistant/device/{bridge.device_id}/config"
+    for published_topic, payload, _retain in reversed(client.published):
+        if published_topic == topic and payload:
+            return json.loads(payload)
+    raise AssertionError(f"missing device discovery on {topic}")
 
 
 def test_topic_construction(bridge: MqttBridge) -> None:
@@ -77,83 +94,84 @@ def test_topic_construction(bridge: MqttBridge) -> None:
     assert bridge.tag_set_topic(bridge.tags_by_id[12194]) == "sigen_evac_local/tag/12194/set"
 
 
-def test_discovery_hides_dangerous_by_default(bridge: MqttBridge) -> None:
+def test_discovery_device_hides_dangerous_by_default(bridge: MqttBridge) -> None:
     bridge.publish_discovery()
-    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
-    topics = {topic for topic, _payload, _retain in client.published}
-    assert any(topic.endswith("_charge_current/config") for topic in topics)
-    assert not any("factory_reset" in topic for topic in topics)
-    assert not any("data_wipe" in topic for topic in topics)
-    by_topic = {topic: json.loads(payload) for topic, payload, _ in client.published if payload}
-    current = next(cfg for topic, cfg in by_topic.items() if topic.endswith("_charge_current/config"))
-    assert current["min"] == 6
-    assert current["max"] == 16
-    assert current["command_topic"] == "sigen_evac_local/current/set"
-    assert "entity_category" not in current
-    start = by_topic[f"homeassistant/button/{bridge.device_id}_start/config"]
-    stop = by_topic[f"homeassistant/button/{bridge.device_id}_stop/config"]
-    assert start["payload_press"] == "START"
-    assert stop["payload_press"] == "STOP"
-    assert not any("charge_start_stop" in topic for topic in topics)
+    payload = _device_payload(bridge)
+    cmps = payload["cmps"]
+    assert payload["o"]["sw"] == "0.2.0"
+    assert "availability" in payload
+    assert cmps["charge_current"]["p"] == "number"
+    assert cmps["charge_current"]["default_entity_id"] == f"number.{bridge.device_id}_charge_current"
+    assert cmps["charge_current"]["min"] == 6
+    assert cmps["charge_current"]["max"] == 16
+    assert "entity_category" not in cmps["charge_current"]
+    assert cmps["factory_reset"] == {"p": "button"}
+    assert cmps["data_wipe"] == {"p": "button"}
+    assert cmps["house_breaker_current"] == {"p": "number"}
+    assert cmps["pole_breaker_current"] == {"p": "number"}
+    assert cmps["start"]["payload_press"] == "START"
+    assert cmps["stop"]["payload_press"] == "STOP"
+    assert "charge_start_stop" not in cmps
 
 
 def test_discovery_ux_cleanup(bridge: MqttBridge) -> None:
     bridge.publish_discovery()
-    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
-    by_topic = {topic: json.loads(payload) for topic, payload, _ in client.published if payload}
-    # Tombstone duplicate synthetic W power sensor
-    assert (f"homeassistant/sensor/{bridge.device_id}_power/config", "", True) in client.published
-    assert f"homeassistant/sensor/{bridge.device_id}_power/config" not in by_topic
-
-    active = by_topic[f"homeassistant/sensor/{bridge.device_id}_charge_power/config"]
-    assert active["name"] == "Active charge power"
-    assert active["unit_of_measurement"] == "kW"
-
-    percent = by_topic[f"homeassistant/number/{bridge.device_id}_charge_power_percent/config"]
-    assert percent["name"] == "Charge power limit (%)"
-    assert percent["entity_category"] == "config"
-
-    fixed = by_topic[f"homeassistant/number/{bridge.device_id}_charge_power_fixed/config"]
-    assert fixed["name"] == "Charge power limit (fixed)"
-    assert fixed["entity_category"] == "config"
-
-    dlm = by_topic[f"homeassistant/number/{bridge.device_id}_dlm_mode/config"]
-    assert dlm["enabled_by_default"] is False
-    assert dlm["entity_category"] == "config"
-
-    session = by_topic[f"homeassistant/sensor/{bridge.device_id}_session_duration/config"]
-    assert session["device_class"] == "duration"
-    lifetime = by_topic[f"homeassistant/sensor/{bridge.device_id}_lifetime_duration/config"]
-    assert lifetime["device_class"] == "duration"
-
-    cable = by_topic[f"homeassistant/sensor/{bridge.device_id}_cable_temp/config"]
-    assert cable["unit_of_measurement"] == "°C"
-    assert cable["device_class"] == "temperature"
-    assert cable["enabled_by_default"] is True
+    cmps = _device_payload(bridge)["cmps"]
+    assert cmps["charge_power"]["name"] == "Active charge power"
+    assert cmps["charge_power"]["unit_of_measurement"] == "kW"
+    assert cmps["charge_power_percent"]["name"] == "Charge power limit (%)"
+    assert cmps["charge_power_percent"]["entity_category"] == "config"
+    assert cmps["charge_power_fixed"]["name"] == "Charge power limit (fixed)"
+    assert cmps["dlm_mode"]["enabled_by_default"] is False
+    assert cmps["session_duration"]["device_class"] == "duration"
+    assert cmps["lifetime_duration"]["device_class"] == "duration"
+    assert cmps["session_energy"]["state_class"] == "total_increasing"
+    assert cmps["cable_temp"]["unit_of_measurement"] == "°C"
+    assert cmps["cable_temp"]["device_class"] == "temperature"
+    wifi = cmps["wifi_ap_password"]
+    assert wifi["p"] == "text"
+    assert "state_topic" not in wifi
+    assert wifi["mode"] == "password"
+    apn = cmps["apn_password"]
+    assert "state_topic" not in apn
 
 
-def test_discovery_includes_dangerous_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.mqtt_bridge as mb
-
-    monkeypatch.setattr(mb.mqtt, "Client", FakeMqttClient)
-    monkeypatch.setattr(mb.mqtt, "MQTT_ERR_SUCCESS", 0)
-    instance = MqttBridge(
-        host="localhost",
-        port=1883,
-        client_id="test-client",
-        tags=load_catalog(),
-        topic_prefix="sigen_evac_local",
-        device_id="sigen_evac_local_SN1",
-        enable_dangerous_commands=True,
-    )
-    instance._connected.set()
+def test_discovery_includes_dangerous_when_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    instance = _bridge(monkeypatch, tmp_path, enable_dangerous_commands=True)
     instance.publish_discovery()
-    client: FakeMqttClient = instance._client  # type: ignore[assignment]
-    topics = {topic for topic, _payload, _retain in client.published}
-    assert any("factory_reset" in topic for topic in topics)
+    cmps = _device_payload(instance)["cmps"]
+    assert cmps["factory_reset"]["p"] == "button"
+    assert "unique_id" in cmps["factory_reset"]
+    assert cmps["house_breaker_current"]["unique_id"].endswith("house_breaker_current")
 
 
-def test_publish_values(bridge: MqttBridge) -> None:
+def test_discovery_migration_marker(bridge: MqttBridge, tmp_path: Path) -> None:
+    marker = tmp_path / "device_discovery_migrated"
+    assert not marker.exists()
+    bridge.publish_discovery()
+    assert marker.exists()
+    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
+    migrate_topics = [
+        topic
+        for topic, payload, _ in client.published
+        if payload == json.dumps({"migrate_discovery": True})
+    ]
+    assert any(topic.endswith("_charge_current/config") for topic in migrate_topics)
+    cleared = {
+        topic
+        for topic, payload, retain in client.published
+        if payload == "" and retain and topic.startswith("homeassistant/") and topic != bridge.device_discovery_topic
+    }
+    assert any(topic.endswith("_charge_current/config") for topic in cleared)
+
+    client.published.clear()
+    bridge.publish_discovery()
+    assert not any(
+        payload == json.dumps({"migrate_discovery": True}) for _topic, payload, _ in client.published
+    )
+
+
+def test_publish_values_skips_secrets_and_keeps_real_setpoint(bridge: MqttBridge) -> None:
     bridge.publish_values(
         {
             12194: 8.0,
@@ -166,6 +184,8 @@ def test_publish_values(bridge: MqttBridge) -> None:
             11265: 0,
             12106: 1,
             12520: 0,
+            11592: "super-secret",
+            12141: "apn-secret",
         }
     )
     client: FakeMqttClient = bridge._client  # type: ignore[assignment]
@@ -179,19 +199,27 @@ def test_publish_values(bridge: MqttBridge) -> None:
     assert by_topic["sigen_evac_local/tag/11265/state"] == "unplugged"
     assert by_topic["sigen_evac_local/tag/12106/state"] == "authentication"
     assert by_topic["sigen_evac_local/tag/12520/state"] == "1_phase"
+    assert "sigen_evac_local/tag/11592/state" not in by_topic
+    assert "sigen_evac_local/tag/12141/state" not in by_topic
+
+
+def test_publish_on_change_cache(bridge: MqttBridge) -> None:
+    bridge.publish("sigen_evac_local/status", "charging", retain=True)
+    bridge.publish("sigen_evac_local/status", "charging", retain=True)
+    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
+    assert sum(1 for topic, payload, _ in client.published if topic.endswith("/status")) == 1
+    bridge._publish_cache.clear()
+    bridge.publish("sigen_evac_local/status", "charging", retain=True)
+    assert sum(1 for topic, payload, _ in client.published if topic.endswith("/status")) == 2
 
 
 def test_discovery_enum_selects(bridge: MqttBridge) -> None:
     bridge.publish_discovery()
-    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
-    by_topic = {topic: json.loads(payload) for topic, payload, _ in client.published if payload}
-    auth = by_topic[f"homeassistant/select/{bridge.device_id}_auth_mode/config"]
-    assert auth["options"] == ["auto_charge", "authentication"]
-    run = by_topic[f"homeassistant/sensor/{bridge.device_id}_run_state/config"]
-    assert run["device_class"] == "enum"
-    assert "charging" in run["options"]
-    status = by_topic[f"homeassistant/sensor/{bridge.device_id}_status/config"]
-    assert status["options"][0] == "unplugged"
+    cmps = _device_payload(bridge)["cmps"]
+    assert cmps["auth_mode"]["options"] == ["auto_charge", "authentication"]
+    assert cmps["run_state"]["device_class"] == "enum"
+    assert "charging" in cmps["run_state"]["options"]
+    assert cmps["status"]["options"][0] == "unplugged"
 
 
 def test_active_phases() -> None:

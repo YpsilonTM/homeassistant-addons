@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from paho.mqtt import client as mqtt
 
 from src.catalog import Tag
+from src.config import ADDON_NAME, ADDON_URL, ADDON_VERSION, DISCOVERY_MIGRATION_MARKER
 from src.enums import encode_enum, enum_options
 
 LOGGER = logging.getLogger(__name__)
@@ -29,8 +32,7 @@ UNIT_DEVICE_CLASS = {
     "C": "temperature",
     "s": "duration",
 }
-ENERGY_TOTAL_INCREASING = {11350, 1330, 1334, 1338}
-ENERGY_TOTAL = {11298}
+ENERGY_TOTAL_INCREASING = {11298, 11350, 1330, 1334, 1338}
 DURATION_TAGS = {11300, 11354}  # session_duration, lifetime_duration
 # Keep these out of the Controls card (primary control is charge current).
 CONFIG_CATEGORY_TAGS = {
@@ -49,6 +51,7 @@ LIFETIME_TAG = 11350
 PHASE_CURRENT_TAGS = (11213, 11215, 11217)
 VOLTAGE_TAG = 11210
 RUN_STATE_TAG = 11265
+SECRET_TAG_IDS = (11592, 12141)
 
 
 class MqttBridge:
@@ -66,6 +69,7 @@ class MqttBridge:
         min_current: int = 6,
         max_current: int = 16,
         enable_dangerous_commands: bool = False,
+        migration_marker: Path | None = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -78,6 +82,7 @@ class MqttBridge:
         self.min_current = min_current
         self.max_current = max_current
         self.enable_dangerous_commands = enable_dangerous_commands
+        self.migration_marker = migration_marker or DISCOVERY_MIGRATION_MARKER
 
         prefix = self.topic_prefix
         self.availability_topic = f"{prefix}/availability"
@@ -91,6 +96,7 @@ class MqttBridge:
         self.lifetime_energy_topic = f"{prefix}/lifetime_energy_kwh"
         self.status_topic = f"{prefix}/status"
         self.command_topic = f"{prefix}/command"
+        self.device_discovery_topic = f"homeassistant/device/{self.device_id}/config"
 
         if hasattr(mqtt, "CallbackAPIVersion"):
             self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=self.client_id)
@@ -101,7 +107,9 @@ class MqttBridge:
             self._client.username_pw_set(username, password)
 
         self._connected = threading.Event()
+        self._disconnected_at: float | None = None
         self._discovery_published = False
+        self._publish_cache: dict[str, str] = {}
         self._device_model: str | None = None
         self._device_sw_version: str | None = None
         self._on_tag_set: Callable[[int, str], None] | None = None
@@ -127,6 +135,11 @@ class MqttBridge:
         if sw_version:
             self._device_sw_version = sw_version
 
+    def mqtt_outage_seconds(self) -> float:
+        if self._disconnected_at is None:
+            return 0.0
+        return time.monotonic() - self._disconnected_at
+
     def tag_state_topic(self, tag: Tag) -> str:
         return f"{self.topic_prefix}/tag/{tag.id}/state"
 
@@ -139,6 +152,8 @@ class MqttBridge:
         if rc != 0:
             LOGGER.error("mqtt_connect_failed reason=%s", reason_code)
             return
+        self._publish_cache.clear()
+        self._disconnected_at = None
         self._connected.set()
         self.publish_availability(True)
         if self._discovery_published:
@@ -153,6 +168,7 @@ class MqttBridge:
     def _on_disconnect(self, client, userdata, disconnect_flags=None, reason_code=None, properties=None):
         del client, userdata, disconnect_flags, properties
         self._connected.clear()
+        self._disconnected_at = time.monotonic()
         LOGGER.warning("mqtt_disconnected reason=%s", reason_code)
 
     def _on_message(self, client, userdata, message):
@@ -202,9 +218,13 @@ class MqttBridge:
     def publish(self, topic: str, payload: str, retain: bool = True) -> None:
         if not self._connected.is_set():
             raise RuntimeError("MQTT not connected")
+        if retain and self._publish_cache.get(topic) == payload:
+            return
         result = self._client.publish(topic, payload, qos=0, retain=retain)
         if result.rc != mqtt.MQTT_ERR_SUCCESS:
             raise RuntimeError(f"MQTT publish failed topic={topic} rc={result.rc}")
+        if retain:
+            self._publish_cache[topic] = payload
 
     def publish_availability(self, online: bool) -> None:
         self.publish(self.availability_topic, "online" if online else "offline", retain=True)
@@ -230,14 +250,13 @@ class MqttBridge:
     def publish_values(self, values: dict[int, Any]) -> None:
         for tag_id, value in values.items():
             tag = self.tags_by_id.get(tag_id)
-            if tag is None:
+            if tag is None or tag.secret:
                 continue
             self.publish(self.tag_state_topic(tag), self.format_state(value, tag_id), retain=True)
 
         current = values.get(CURRENT_TAG)
         if isinstance(current, (int, float)):
-            clamped = min(float(self.max_current), max(float(self.min_current), float(current)))
-            self.publish(self.current_state_topic, self._num(clamped), retain=True)
+            self.publish(self.current_state_topic, self._num(float(current)), retain=True)
 
         power_kw = values.get(POWER_TAG)
         if isinstance(power_kw, (int, float)):
@@ -261,6 +280,13 @@ class MqttBridge:
 
         self.publish(self.active_phases_topic, str(active_phases(values)), retain=True)
         self.publish(self.state_topic, json.dumps(self._state_bundle(values)), retain=True)
+
+    def clear_secret_retained_states(self) -> None:
+        for tag_id in SECRET_TAG_IDS:
+            tag = self.tags_by_id.get(tag_id)
+            if tag is None:
+                continue
+            self.publish(self.tag_state_topic(tag), "", retain=True)
 
     def _state_bundle(self, values: dict[int, Any]) -> dict[str, Any]:
         featured = {}
@@ -294,7 +320,46 @@ class MqttBridge:
             visible.append(tag)
         return visible
 
+    def _legacy_discovery_topics(self) -> list[str]:
+        topics = [
+            f"homeassistant/sensor/{self.device_id}_current_meas/config",
+            f"homeassistant/sensor/{self.device_id}_voltage/config",
+            f"homeassistant/sensor/{self.device_id}_active_phases/config",
+            f"homeassistant/sensor/{self.device_id}_status/config",
+            f"homeassistant/button/{self.device_id}_start/config",
+            f"homeassistant/button/{self.device_id}_stop/config",
+            f"homeassistant/sensor/{self.device_id}_power/config",
+        ]
+        for tag in self.tags:
+            if tag.id == START_STOP_TAG:
+                continue
+            platform = self._tag_platform(tag)
+            topics.append(f"homeassistant/{platform}/{self.device_id}_{tag.slug}/config")
+        return topics
+
+    def _migrate_legacy_discovery(self) -> None:
+        marker = self.migration_marker
+        if marker.is_file():
+            return
+        migrate_payload = json.dumps({"migrate_discovery": True})
+        for topic in self._legacy_discovery_topics():
+            self.publish(topic, migrate_payload, retain=True)
+        LOGGER.info("mqtt_discovery_migration_started topics=%s", len(self._legacy_discovery_topics()))
+
+    def _finalize_legacy_migration(self) -> None:
+        marker = self.migration_marker
+        if marker.is_file():
+            return
+        for topic in self._legacy_discovery_topics():
+            self.publish(topic, "", retain=True)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("1\n", encoding="utf-8")
+        LOGGER.info("mqtt_discovery_migration_complete marker=%s", marker)
+
     def publish_discovery(self) -> None:
+        self.device_discovery_topic = f"homeassistant/device/{self.device_id}/config"
+        self._migrate_legacy_discovery()
+
         device = {
             "identifiers": [self.device_id],
             "name": self.device_name,
@@ -304,107 +369,149 @@ class MqttBridge:
         if self._device_sw_version:
             device["sw_version"] = self._device_sw_version
 
-        availability = {"topic": self.availability_topic}
-        configs: list[tuple[str, dict[str, Any]]] = [
+        origin = {
+            "name": ADDON_NAME,
+            "sw": ADDON_VERSION,
+            "url": ADDON_URL,
+        }
+        availability = [{"topic": self.availability_topic}]
+        cmps: dict[str, dict[str, Any]] = {}
+
+        for component_id, platform, payload in self._synthetic_components():
+            cmps[component_id] = {"p": platform, **payload}
+
+        for tag in self.tags:
+            if tag.id == START_STOP_TAG:
+                continue
+            platform = self._tag_platform(tag)
+            component_id = tag.slug
+            if tag.dangerous and not self.enable_dangerous_commands:
+                cmps[component_id] = {"p": platform}
+                continue
+            _, _, payload = self._tag_component(tag)
+            cmps[component_id] = {"p": platform, **payload}
+
+        discovery = {
+            "dev": device,
+            "o": origin,
+            "availability": availability,
+            "cmps": cmps,
+        }
+        self.publish(self.device_discovery_topic, json.dumps(discovery), retain=True)
+        self.clear_secret_retained_states()
+        self._finalize_legacy_migration()
+        self._discovery_published = True
+        LOGGER.info(
+            "mqtt_discovery_published device_id=%s components=%s topic=%s",
+            self.device_id,
+            len(cmps),
+            self.device_discovery_topic,
+        )
+
+    def _synthetic_components(self) -> list[tuple[str, str, dict[str, Any]]]:
+        return [
             (
-                f"homeassistant/sensor/{self.device_id}_current_meas/config",
+                "current_meas",
+                "sensor",
                 {
                     "name": "Charging Current",
                     "unique_id": f"{self.device_id}_current_meas",
+                    "default_entity_id": f"sensor.{self.device_id}_current_meas",
                     "state_topic": self.current_meas_topic,
-                    "availability": [availability],
                     "unit_of_measurement": "A",
                     "device_class": "current",
                     "state_class": "measurement",
-                    "device": device,
                 },
             ),
             (
-                f"homeassistant/sensor/{self.device_id}_voltage/config",
+                "voltage",
+                "sensor",
                 {
                     "name": "Charging Voltage",
                     "unique_id": f"{self.device_id}_voltage",
+                    "default_entity_id": f"sensor.{self.device_id}_voltage",
                     "state_topic": self.voltage_topic,
-                    "availability": [availability],
                     "unit_of_measurement": "V",
                     "device_class": "voltage",
                     "state_class": "measurement",
-                    "device": device,
                 },
             ),
             (
-                f"homeassistant/sensor/{self.device_id}_active_phases/config",
+                "active_phases",
+                "sensor",
                 {
                     "name": "Active Phases",
                     "unique_id": f"{self.device_id}_active_phases",
+                    "default_entity_id": f"sensor.{self.device_id}_active_phases",
                     "state_topic": self.active_phases_topic,
-                    "availability": [availability],
                     "state_class": "measurement",
                     "entity_category": "diagnostic",
-                    "device": device,
                 },
             ),
             (
-                f"homeassistant/sensor/{self.device_id}_status/config",
+                "status",
+                "sensor",
                 {
                     "name": "Run State",
                     "unique_id": f"{self.device_id}_status",
+                    "default_entity_id": f"sensor.{self.device_id}_status",
                     "state_topic": self.status_topic,
-                    "availability": [availability],
                     "entity_category": "diagnostic",
                     "device_class": "enum",
                     "options": enum_options(RUN_STATE_TAG) or [],
-                    "device": device,
                 },
             ),
             (
-                f"homeassistant/button/{self.device_id}_start/config",
+                "start",
+                "button",
                 {
                     "name": "Start Charging",
                     "unique_id": f"{self.device_id}_start",
+                    "default_entity_id": f"button.{self.device_id}_start",
                     "command_topic": self.command_topic,
                     "payload_press": "START",
-                    "availability": [availability],
                     "icon": "mdi:ev-station",
-                    "device": device,
                 },
             ),
             (
-                f"homeassistant/button/{self.device_id}_stop/config",
+                "stop",
+                "button",
                 {
                     "name": "Stop Charging",
                     "unique_id": f"{self.device_id}_stop",
+                    "default_entity_id": f"button.{self.device_id}_stop",
                     "command_topic": self.command_topic,
                     "payload_press": "STOP",
-                    "availability": [availability],
                     "icon": "mdi:stop-circle-outline",
-                    "device": device,
                 },
             ),
         ]
 
-        for tag in self.visible_tags():
-            configs.append(self._tag_discovery(tag, device, availability))
+    def _tag_platform(self, tag: Tag) -> str:
+        options = enum_options(tag.id)
+        if tag.id == CURRENT_TAG:
+            return "number"
+        if options is not None and tag.writable:
+            return "select"
+        if options is not None:
+            return "sensor"
+        if tag.platform == "sensor":
+            return "sensor"
+        if tag.platform == "number":
+            return "number"
+        if tag.platform == "text":
+            return "text"
+        return "button"
 
-        for topic, payload in configs:
-            self.publish(topic, json.dumps(payload), retain=True)
-
-        # Drop the old synthetic W power sensor (duplicates catalog charge_power in kW).
-        self.publish(f"homeassistant/sensor/{self.device_id}_power/config", "", retain=True)
-
-        self._discovery_published = True
-        LOGGER.info("mqtt_discovery_published device_id=%s entities=%s", self.device_id, len(configs))
-
-    def _tag_discovery(self, tag: Tag, device: dict[str, Any], availability: dict[str, str]) -> tuple[str, dict[str, Any]]:
+    def _tag_component(self, tag: Tag) -> tuple[str, str, dict[str, Any]]:
+        platform = self._tag_platform(tag)
         unique_id = f"{self.device_id}_{tag.slug}"
         unit = UNIT_NORMALIZE.get(tag.unit, tag.unit) if tag.unit else ""
         payload: dict[str, Any] = {
             "name": tag.name,
             "unique_id": unique_id,
-            "availability": [availability],
-            "device": device,
+            "default_entity_id": f"{platform}.{unique_id}",
             "enabled_by_default": tag.enabled_by_default and not tag.secret,
-            "object_id": f"{self.device_id}_{tag.slug}",
         }
         if tag.secret or not tag.enabled_by_default or tag.id in CONFIG_CATEGORY_TAGS:
             payload["entity_category"] = "diagnostic" if tag.access == "RO" else "config"
@@ -418,12 +525,9 @@ class MqttBridge:
             payload["device_class"] = device_class
         if tag.id in ENERGY_TOTAL_INCREASING:
             payload["state_class"] = "total_increasing"
-        elif tag.id in ENERGY_TOTAL:
-            payload["state_class"] = "total"
         elif device_class in {"power", "current", "voltage", "temperature", "frequency"}:
             payload["state_class"] = "measurement"
 
-        platform = tag.platform
         options = enum_options(tag.id)
         if tag.id == CURRENT_TAG:
             payload.update(
@@ -438,10 +542,9 @@ class MqttBridge:
                     "enabled_by_default": True,
                 }
             )
-            # Primary control: leave entity_category unset so HA shows it under Controls.
             payload.pop("entity_category", None)
             payload.pop("state_class", None)
-            return f"homeassistant/number/{unique_id}/config", payload
+            return tag.slug, platform, payload
 
         if options is not None and tag.writable:
             payload.update(
@@ -455,7 +558,7 @@ class MqttBridge:
             payload.pop("unit_of_measurement", None)
             payload.pop("device_class", None)
             payload.pop("state_class", None)
-            return f"homeassistant/select/{unique_id}/config", payload
+            return tag.slug, platform, payload
 
         if options is not None:
             payload["state_topic"] = self.tag_state_topic(tag)
@@ -463,11 +566,11 @@ class MqttBridge:
             payload["options"] = options
             payload.pop("unit_of_measurement", None)
             payload.pop("state_class", None)
-            return f"homeassistant/sensor/{unique_id}/config", payload
+            return tag.slug, platform, payload
 
         if platform == "sensor":
             payload["state_topic"] = self.tag_state_topic(tag)
-            return f"homeassistant/sensor/{unique_id}/config", payload
+            return tag.slug, platform, payload
 
         if platform == "number":
             payload.update(self._number_bounds(tag))
@@ -475,21 +578,22 @@ class MqttBridge:
             payload["state_topic"] = self.tag_state_topic(tag)
             payload["mode"] = "box"
             payload.pop("state_class", None)
-            return f"homeassistant/number/{unique_id}/config", payload
+            return tag.slug, platform, payload
 
         if platform == "text":
             payload["command_topic"] = self.tag_set_topic(tag)
-            payload["state_topic"] = self.tag_state_topic(tag)
+            if not tag.secret:
+                payload["state_topic"] = self.tag_state_topic(tag)
             if tag.secret:
                 payload["mode"] = "password"
-            return f"homeassistant/text/{unique_id}/config", payload
+            return tag.slug, platform, payload
 
         payload["command_topic"] = self.tag_set_topic(tag)
         payload["payload_press"] = "1"
         payload["entity_category"] = "config"
         if tag.dangerous:
             payload["icon"] = "mdi:alert"
-        return f"homeassistant/button/{unique_id}/config", payload
+        return tag.slug, platform, payload
 
     def _number_bounds(self, tag: Tag) -> dict[str, float]:
         step = 1.0 / tag.scale if tag.scale > 1 else 1

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- Switch to MQTT **device discovery** (`homeassistant/device/<id>/config`) with a one-time migration that keeps existing entity IDs and history
+- Use `default_entity_id` instead of deprecated `object_id`
+- Stop polling/publishing Wi‑Fi password / APN secrets; clear any retained secret state topics; secrets become write-only
+- Gate house/pole breaker current (12116 / 12118) behind `enable_dangerous_commands`
+- Publish the real charge-current setpoint on `current/state` (clamp on write only)
+- Mark `session_energy` as `state_class: total_increasing`
+- NearTerminal: frame buffer + sequence matching, silent single retry on no-reply, quieter poll errors
+- Per-tag write error handling, RW write dedup, publish-on-change retained MQTT cache
+- `run.sh` uses `bashio::config` / `bashio::config.has_value` (Supervisor MQTT fallback kept)
+- Self-watchdog exits on stalled loop or long MQTT outage — enable Supervisor Watchdog
+- Add `translations/en.yaml`, `icon.png`, `logo.png`; scrub example IPs/serials; drop `uv.lock`
+
 ## 0.1.4
 
 - Hide raw `DLM mode` by default until value names are known

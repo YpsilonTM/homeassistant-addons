@@ -1,0 +1,46 @@
+configuration:
+  charger_host:
+    name: Charger host
+    description: LAN IP or hostname of the Sigen EV AC pole (NearTerminal).
+  charger_port:
+    name: Charger port
+    description: NearTerminal TLS port (default 21319).
+  poll_interval_seconds:
+    name: Poll interval
+    description: Seconds between fast-tag polls.
+  slow_poll_multiplier:
+    name: Slow poll multiplier
+    description: Read the full catalog every Nth poll cycle.
+  min_current:
+    name: Minimum charge current
+    description: Lower clamp for charge current writes (amps).
+  max_current:
+    name: Maximum charge current
+    description: Upper clamp for charge current writes (amps).
+  enable_dangerous_commands:
+    name: Enable dangerous commands
+    description: Expose factory reset, data wipe, and breaker-current writes.
+  mqtt_host:
+    name: MQTT host
+    description: Broker hostname. Leave empty to use the Supervisor MQTT service.
+  mqtt_port:
+    name: MQTT port
+    description: Broker port. Leave empty to use the Supervisor MQTT service.
+  mqtt_username:
+    name: MQTT username
+    description: Broker username. Leave empty to use the Supervisor MQTT service.
+  mqtt_password:
+    name: MQTT password
+    description: Broker password. Leave empty to use the Supervisor MQTT service.
+  mqtt_client_id:
+    name: MQTT client ID
+    description: Client identifier used when connecting to the broker.
+  topic_prefix:
+    name: Topic prefix
+    description: Root MQTT topic prefix for state and command topics.
+  device_name:
+    name: Device name
+    description: Home Assistant device name shown in the UI.
+  log_level:
+    name: Log level
+    description: Verbosity of add-on logs.

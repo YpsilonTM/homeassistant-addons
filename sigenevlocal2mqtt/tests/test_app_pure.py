@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from src.app import clamp_amps, parse_command_payload, parse_write_value, readable_tags
+from src.app import (
+    clamp_amps,
+    parse_command_payload,
+    parse_write_value,
+    readable_tags,
+    values_equal,
+    watchdog_timeout_seconds,
+)
 from src.catalog import load_catalog, tags_by_id
 from src.config import Settings
 
@@ -9,7 +16,7 @@ def _settings(**overrides) -> Settings:
     from pathlib import Path
 
     base = dict(
-        charger_host="192.168.50.36",
+        charger_host="192.0.2.10",
         charger_port=21319,
         poll_interval_seconds=5.0,
         slow_poll_multiplier=4,
@@ -61,4 +68,12 @@ def test_readable_tags_fast_vs_slow() -> None:
     slow = readable_tags(tags, include_slow=True)
     assert all(tag.fast for tag in fast)
     assert all(tag.access != "CMD" for tag in slow)
+    assert all(not tag.secret for tag in slow)
     assert len(slow) > len(fast)
+
+
+def test_values_equal_and_watchdog_timeout() -> None:
+    assert values_equal(8.0, 8)
+    assert not values_equal(8.0, 9)
+    assert watchdog_timeout_seconds(5) == 300.0
+    assert watchdog_timeout_seconds(40) == 400.0

@@ -29,5 +29,11 @@ def test_charge_current_roundtrip() -> None:
 
 def test_string_roundtrip() -> None:
     tag = tags_by_id()[24]
-    raw = tag.encode("120A64150210")
-    assert tag.decode(raw) == "120A64150210"
+    raw = tag.encode("SERIAL0000001")
+    assert tag.decode(raw) == "SERIAL0000001"
+
+
+def test_breaker_currents_are_dangerous() -> None:
+    by_id = tags_by_id()
+    assert by_id[12116].dangerous is True
+    assert by_id[12118].dangerous is True

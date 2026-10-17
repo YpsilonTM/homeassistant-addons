@@ -3689,7 +3689,7 @@
       "enabled_by_default": true,
       "fast": false,
       "secret": false,
-      "dangerous": false
+      "dangerous": true
     },
     {
       "id": 12118,
@@ -3707,7 +3707,7 @@
       "enabled_by_default": true,
       "fast": false,
       "secret": false,
-      "dangerous": false
+      "dangerous": true
     },
     {
       "id": 12120,

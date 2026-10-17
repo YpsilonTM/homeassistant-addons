@@ -8,7 +8,12 @@ UNOFFICIAL_NOTICE = (
     "Unofficial and not affiliated with Sigenergy. "
     "Use may affect hardware warranty or mySigen Terms of Service."
 )
+ADDON_VERSION = "0.2.0"
+ADDON_URL = "https://github.com/YpsilonTM/homeassistant-addons"
+ADDON_NAME = "Sigen EV Local to MQTT"
 BUNDLED_CERT_DIR = Path(__file__).resolve().parent / "certs"
+DATA_DIR = Path("/data") if Path("/data").is_dir() else Path(__file__).resolve().parents[1] / ".data"
+DISCOVERY_MIGRATION_MARKER = DATA_DIR / "device_discovery_migrated"
 
 
 @dataclass(frozen=True)

@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import signal
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,12 +15,13 @@ from src.catalog import Tag, load_catalog
 from src.config import UNOFFICIAL_NOTICE, Settings, load_settings
 from src.enums import decode_enum
 from src.mqtt_bridge import CURRENT_TAG, START_STOP_TAG, START_VALUE, STOP_VALUE, MqttBridge
-from src.near import NearClient
+from src.near import NearClient, NearError
 
 LOGGER = logging.getLogger(__name__)
 
 CHARGER_OFFLINE_AFTER_FAILURES = 3
 STARTUP_BACKOFF_MAX_SECONDS = 60.0
+MQTT_OUTAGE_EXIT_SECONDS = 300.0
 
 
 @dataclass(frozen=True)
@@ -82,14 +85,26 @@ def parse_write_value(tag: Tag, payload: str) -> Any:
     return float(payload)
 
 
+def values_equal(left: Any, right: Any) -> bool:
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return abs(float(left) - float(right)) < 1e-9
+    return left == right
+
+
 def readable_tags(tags: list[Tag], include_slow: bool) -> list[Tag]:
     selected = []
     for tag in tags:
         if tag.access == "CMD":
             continue
+        if tag.secret:
+            continue
         if include_slow or tag.fast:
             selected.append(tag)
     return selected
+
+
+def watchdog_timeout_seconds(poll_interval: float) -> float:
+    return max(10.0 * float(poll_interval), 300.0)
 
 
 def _drain_writes(queue: asyncio.Queue[TagWrite]) -> dict[int, TagWrite]:
@@ -128,7 +143,7 @@ async def local_check(settings: Settings, set_current: float | None) -> int:
     client = NearClient(settings.charger_host, settings.charger_port, settings.cert_path, settings.key_path)
     try:
         await asyncio.to_thread(client.connect)
-        featured = [tag for tag in tags if tag.enabled_by_default and tag.access != "CMD"]
+        featured = [tag for tag in tags if tag.enabled_by_default and tag.access != "CMD" and not tag.secret]
         values = await asyncio.to_thread(client.read_tags, featured)
         LOGGER.info(
             "local_check host=%s serial=%s model=%s fw=%s",
@@ -159,6 +174,9 @@ async def run_bridge(settings: Settings) -> int:
     thread_stop = threading.Event()
     loop = asyncio.get_running_loop()
     write_queue: asyncio.Queue[TagWrite] = asyncio.Queue()
+    exit_code = 0
+    last_cycle_at = time.monotonic()
+    watchdog_limit = watchdog_timeout_seconds(settings.poll_interval_seconds)
 
     def _request_stop() -> None:
         stop_event.set()
@@ -222,6 +240,30 @@ async def run_bridge(settings: Settings) -> int:
 
     mqtt.set_reconnect_handler(on_mqtt_reconnect)
 
+    def _watchdog_tick() -> None:
+        nonlocal exit_code, last_cycle_at
+        while not thread_stop.is_set():
+            stalled = time.monotonic() - last_cycle_at
+            mqtt_outage = mqtt.mqtt_outage_seconds()
+            if stalled > watchdog_limit:
+                LOGGER.error(
+                    "watchdog_exit reason=loop_stalled stalled=%.1fs limit=%.1fs",
+                    stalled,
+                    watchdog_limit,
+                )
+                exit_code = 1
+                _request_stop()
+                os._exit(1)
+            if mqtt_outage > MQTT_OUTAGE_EXIT_SECONDS:
+                LOGGER.error(
+                    "watchdog_exit reason=mqtt_outage outage=%.1fs",
+                    mqtt_outage,
+                )
+                exit_code = 1
+                _request_stop()
+                os._exit(1)
+            thread_stop.wait(5.0)
+
     await asyncio.to_thread(mqtt.connect_with_backoff, thread_stop)
     if stop_event.is_set():
         mqtt.disconnect()
@@ -238,6 +280,9 @@ async def run_bridge(settings: Settings) -> int:
     mqtt.update_device_info(near.model, near.firmware)
     mqtt.publish_discovery()
 
+    watchdog = threading.Thread(target=_watchdog_tick, name="sigen-watchdog", daemon=True)
+    watchdog.start()
+
     LOGGER.info(
         "bridge_started poll=%ss slow_poll_x=%s mqtt=%s:%s prefix=%s device_id=%s host=%s",
         settings.poll_interval_seconds,
@@ -252,17 +297,31 @@ async def run_bridge(settings: Settings) -> int:
     try:
         while not stop_event.is_set():
             pending = _drain_writes(write_queue)
-            if pending:
+            for tag_id, command in pending.items():
+                tag = by_id[tag_id]
                 try:
-                    for tag_id, command in pending.items():
-                        tag = by_id[tag_id]
-                        value = parse_write_value(tag, command.value)
-                        if tag.id == CURRENT_TAG:
-                            value = clamp_amps(float(value), settings)
-                        await asyncio.to_thread(near.write_tag, tag, value)
+                    value = parse_write_value(tag, command.value)
+                    if tag.id == CURRENT_TAG:
+                        value = clamp_amps(float(value), settings)
+                    if tag.access == "RW" and tag.id in last_values and values_equal(last_values[tag.id], value):
+                        LOGGER.debug(
+                            "write_dedup tag=%s slug=%s value=%r",
+                            tag.id,
+                            tag.slug,
+                            value,
+                        )
+                        continue
+                    await asyncio.to_thread(near.write_tag, tag, value)
                     consecutive_failures = 0
+                except ValueError:
+                    LOGGER.warning(
+                        "invalid_payload tag=%s slug=%s payload=%r",
+                        tag.id,
+                        tag.slug,
+                        command.value,
+                    )
                 except Exception:
-                    LOGGER.exception("write_failed tags=%s", list(pending))
+                    LOGGER.exception("write_failed tag=%s slug=%s", tag.id, tag.slug)
                     consecutive_failures += 1
 
             try:
@@ -279,6 +338,15 @@ async def run_bridge(settings: Settings) -> int:
                 if marked_offline:
                     mqtt.publish_availability(True)
                     marked_offline = False
+            except (NearError, OSError) as exc:
+                LOGGER.warning("poll_failed %s: %s", type(exc).__name__, exc)
+                consecutive_failures += 1
+                if consecutive_failures >= CHARGER_OFFLINE_AFTER_FAILURES and not marked_offline:
+                    try:
+                        mqtt.publish_availability(False)
+                        marked_offline = True
+                    except Exception:
+                        LOGGER.exception("availability_offline_publish_failed")
             except Exception:
                 LOGGER.exception("poll_failed")
                 consecutive_failures += 1
@@ -290,15 +358,17 @@ async def run_bridge(settings: Settings) -> int:
                         LOGGER.exception("availability_offline_publish_failed")
 
             poll_cycle += 1
+            last_cycle_at = time.monotonic()
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=settings.poll_interval_seconds)
             except asyncio.TimeoutError:
                 pass
     finally:
+        thread_stop.set()
         near.close()
         mqtt.disconnect()
         LOGGER.info("bridge_stopped")
-    return 0
+    return exit_code
 
 
 async def async_main() -> int:

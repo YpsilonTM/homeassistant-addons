@@ -177,6 +177,32 @@ def parse_ident_nodes(body: bytes) -> list[dict[str, Any]]:
     return nodes
 
 
+def recv_frame(sock: ssl.SSLSocket, timeout: float, buf: bytearray) -> bytes:
+    """Return one complete Near frame, keeping leftovers in ``buf``.
+
+    Incomplete data is left in ``buf`` and an empty ``bytes`` is returned.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if len(buf) >= 7:
+            _seq, _magic, length = struct.unpack_from("<HHH", buf, 0)
+            need = 6 + length
+            if len(buf) >= need:
+                frame = bytes(buf[:need])
+                del buf[:need]
+                return frame
+        remaining = max(0.05, deadline - time.time())
+        sock.settimeout(remaining)
+        try:
+            chunk = sock.recv(4096)
+        except TimeoutError:
+            break
+        if not chunk:
+            break
+        buf += chunk
+    return b""
+
+
 class NearClient:
     def __init__(
         self,
@@ -194,6 +220,7 @@ class NearClient:
         self._sock: ssl.SSLSocket | None = None
         self._seq = 1
         self._lock = threading.Lock()
+        self._rx_buf = bytearray()
         self.serial: str | None = None
         self.model: str | None = None
         self.firmware: str | None = None
@@ -201,6 +228,7 @@ class NearClient:
     def close(self) -> None:
         sock = self._sock
         self._sock = None
+        self._rx_buf.clear()
         if sock is None:
             return
         try:
@@ -220,6 +248,7 @@ class NearClient:
         sock.settimeout(self.timeout)
         self._sock = sock
         self._seq = 1
+        self._rx_buf.clear()
         self._handshake()
         LOGGER.info(
             "near_connected host=%s tls=%s cipher=%s serial=%s",
@@ -286,6 +315,16 @@ class NearClient:
                     self.model = text
 
     def _read_chunk(self, path: bytes, tags: list[Tag]) -> dict[int, Any]:
+        try:
+            return self._read_chunk_once(path, tags)
+        except NearError as exc:
+            if str(exc) != "no reply":
+                raise
+            self.close()
+            self.ensure_connected()
+            return self._read_chunk_once(path, tags)
+
+    def _read_chunk_once(self, path: bytes, tags: list[Tag]) -> dict[int, Any]:
         parsed = self._request(build_batch_read(tags), path, encrypted=True)
         raw_values = decode_batch_read(parsed["body"])
         decoded: dict[int, Any] = {}
@@ -305,26 +344,13 @@ class NearClient:
         payload = aes_encrypt(extra) if encrypted else extra
         frame = build_frame(seq, payload, x, PEER_PATH, encrypted)
         sock.sendall(frame)
-        reply = recv_frame(sock, self.timeout)
-        if not reply:
-            raise NearError("no reply")
-        return parse_frame(reply)
-
-
-def recv_frame(sock: ssl.SSLSocket, timeout: float) -> bytes:
-    buf = bytearray()
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            chunk = sock.recv(4096)
-        except TimeoutError:
-            break
-        if not chunk:
-            break
-        buf += chunk
-        if len(buf) >= 7:
-            _seq, _magic, length = struct.unpack_from("<HHH", buf, 0)
-            need = 6 + length
-            if len(buf) >= need:
-                return bytes(buf[:need])
-    return bytes(buf)
+        deadline = time.time() + self.timeout
+        while time.time() < deadline:
+            remaining = max(0.05, deadline - time.time())
+            reply = recv_frame(sock, remaining, self._rx_buf)
+            if not reply:
+                break
+            parsed = parse_frame(reply)
+            if parsed["seq"] == seq:
+                return parsed
+        raise NearError("no reply")
