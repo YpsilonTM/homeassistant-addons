@@ -3,7 +3,7 @@
 This is a [Home Assistant add-on repository](https://developers.home-assistant.io/docs/add-ons/): one git repo, one `repository.yaml`, multiple installable add-ons.
 
 ```
-hassaddons/
+homeassistant-addons/
 ├── repository.yaml          # Store metadata (required at repo root)
 ├── README.md                # Store landing page
 ├── docs/                    # Maintainer docs (not shown in HA UI)
@@ -23,14 +23,14 @@ hassaddons/
 
 | Slug | Image | Description |
 |------|-------|-------------|
-| `modqtt` | `ghcr.io/ypsilontm/hassaddons/addon-modqtt` | Modbus TCP → MQTT bridge |
-| `sigenevlocal2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-sigenevlocal2mqtt` | Sigenergy local NearTerminal → MQTT for Sigen EV |
-| `ocppsigen2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-ocppsigen2mqtt` | **Deprecated** — OCPP 1.6 → MQTT for Sigen EV |
-| `sigenevcloud2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-sigenevcloud2mqtt` | **Deprecated** — Sigenergy cloud → MQTT for Sigen EV |
+| `modqtt` | `ghcr.io/ypsilontm/homeassistant-addons/addon-modqtt` | Modbus TCP → MQTT bridge |
+| `sigenevlocal2mqtt` | `ghcr.io/ypsilontm/homeassistant-addons/addon-sigenevlocal2mqtt` | Sigenergy local NearTerminal → MQTT for Sigen EV |
+| `ocppsigen2mqtt` | `ghcr.io/ypsilontm/homeassistant-addons/addon-ocppsigen2mqtt` | **Deprecated** — OCPP 1.6 → MQTT for Sigen EV |
+| `sigenevcloud2mqtt` | `ghcr.io/ypsilontm/homeassistant-addons/addon-sigenevcloud2mqtt` | **Deprecated** — Sigenergy cloud → MQTT for Sigen EV |
 
 ## How Home Assistant uses this repo
 
-1. User adds `https://github.com/YpsilonTM/hassaddons` under **Settings → Add-ons → Add-on store**.
+1. User adds `https://github.com/YpsilonTM/homeassistant-addons` under **Settings → Add-ons → Add-on store**.
 2. Supervisor reads `repository.yaml` and scans top-level folders for `config.yaml`.
 3. Each add-on’s `image:` field points at a pre-built image on GHCR (built by CI).
 4. At runtime, `run.sh` maps add-on options to environment variables and starts the app.

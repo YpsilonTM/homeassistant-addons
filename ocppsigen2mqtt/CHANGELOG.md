@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Added `state_class: measurement` to power and current sensors for improved Home Assistant Energy Dashboard compatibility.
 
+## [1.0.3] - 2026-10-17
+
+### Fixed
+- Point GHCR image at `homeassistant-addons` after the repo rename (`hassaddons` → `homeassistant-addons`)
+
 ## [1.0.2] - 2026-10-17
 
 ### Deprecated

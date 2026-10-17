@@ -16,7 +16,7 @@ ModQTT is a general-purpose Modbus TCP to MQTT bridge. It reads values from any 
 
 1. In Home Assistant, go to Settings → Add-ons → Add-on Store.
 2. Add this repository URL:
-   - https://github.com/YpsilonTM/hassaddons
+   - https://github.com/YpsilonTM/homeassistant-addons
 3. Install the ModQTT add-on.
 
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+### Fixed
+- Point GHCR image at `homeassistant-addons` after the repo rename (`hassaddons` → `homeassistant-addons`)
+
 ## 0.3.2
 
 ### Deprecated

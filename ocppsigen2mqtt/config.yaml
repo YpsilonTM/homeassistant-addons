@@ -1,9 +1,9 @@
 name: OCPP SIGEN to MQTT [deprecated]
 slug: ocppsigen2mqtt
 description: Deprecated – use Sigen EV Local to MQTT instead. OCPP 1.6 central system bridge for Sigen EV chargers.
-version: 1.0.2
-image: ghcr.io/ypsilontm/hassaddons/addon-ocppsigen2mqtt
-url: https://github.com/YpsilonTM/hassaddons
+version: 1.0.3
+image: ghcr.io/ypsilontm/homeassistant-addons/addon-ocppsigen2mqtt
+url: https://github.com/YpsilonTM/homeassistant-addons
 arch:
   - aarch64
   - amd64

@@ -4,9 +4,9 @@ Community add-on repository for [Home Assistant](https://www.home-assistant.io/)
 
 Add this URL under **Settings → Add-ons → Add-on store → ⋮ → Repositories**:
 
-`https://github.com/YpsilonTM/hassaddons`
+`https://github.com/YpsilonTM/homeassistant-addons`
 
-[![Open your Home Assistant instance and show the add app repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FYpsilonTM%2Fhassaddons)
+[![Open your Home Assistant instance and show the add app repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FYpsilonTM%2Fhomeassistant-addons)
 
 ## Add-ons
 
@@ -24,7 +24,7 @@ These remain installable for existing users but are no longer maintained. Use **
 | **OCPP SIGEN to MQTT** | OCPP 1.6 central system for Sigen EV chargers | [DOCS.md](ocppsigen2mqtt/DOCS.md) |
 | **Sigen EV Cloud to MQTT** | Sigenergy cloud control (current, start/stop, phase mode) | [DOCS.md](sigenevcloud2mqtt/DOCS.md) |
 
-Pre-built images: `ghcr.io/ypsilontm/hassaddons/addon-<slug>`
+Pre-built images: `ghcr.io/ypsilontm/homeassistant-addons/addon-<slug>`
 
 ## Repository layout
 

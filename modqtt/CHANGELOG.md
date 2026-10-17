@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-17
+### Fixed
+- Point GHCR image at `homeassistant-addons` after the repo rename (`hassaddons` → `homeassistant-addons`)
+
 ## [0.2.2] - 2026-09-10
 ### Fixed
 - ModQTT now survives a Mosquitto restart without a manual add-on restart. Previously a broker bounce left the client publishing `rc=4` (`MQTT_ERR_NO_CONN`) forever while Modbus polling kept running, so Home Assistant showed stale retained values indefinitely.

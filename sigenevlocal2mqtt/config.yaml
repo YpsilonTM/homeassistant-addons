@@ -3,7 +3,7 @@ slug: sigenevlocal2mqtt
 description: Unofficial local NearTerminal bridge for Sigen EV AC. Not affiliated with Sigenergy. May affect warranty or mySigen Terms of Service.
 version: 0.1.4
 image: ghcr.io/ypsilontm/homeassistant-addons/addon-sigenevlocal2mqtt
-url: https://github.com/YpsilonTM/hassaddons
+url: https://github.com/YpsilonTM/homeassistant-addons
 arch:
   - aarch64
   - amd64
