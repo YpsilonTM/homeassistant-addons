@@ -13,6 +13,7 @@ Add this URL under **Settings → Add-ons → Add-on store → ⋮ → Repositor
 | Add-on | Description | Docs |
 |--------|-------------|------|
 | **ModQTT** | Modbus TCP → MQTT bridge | [DOCS.md](modqtt/DOCS.md) |
+| **Sungrow Modbus to MQTT** | Unofficial Sungrow hybrid inverter Modbus TCP → MQTT. Not affiliated with Sungrow. | [DOCS.md](sungrowmod2mqtt/DOCS.md) |
 | **Sigen EV Local to MQTT** | Unofficial local NearTerminal control (full EVAC catalog). Not affiliated with Sigenergy. | [DOCS.md](sigenevlocal2mqtt/DOCS.md) |
 
 ### Deprecated

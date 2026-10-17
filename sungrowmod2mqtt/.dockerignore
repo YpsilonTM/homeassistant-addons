@@ -1,0 +1,13 @@
+# Dev / local files
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+*.md
+scripts/
+.venv/
+__pycache__/
+tests/
+requirements-dev.txt
+pyproject.toml

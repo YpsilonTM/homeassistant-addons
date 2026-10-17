@@ -21,6 +21,7 @@ on:
           - ocppsigen2mqtt
           - sigenevcloud2mqtt
           - sigenevlocal2mqtt
+          - sungrowmod2mqtt
   push:
     branches:
       - main
@@ -32,6 +33,7 @@ on:
       - ocppsigen2mqtt/**
       - sigenevcloud2mqtt/**
       - sigenevlocal2mqtt/**
+      - sungrowmod2mqtt/**
       - .github/workflows/build-addons.yml
   pull_request:
     paths:
@@ -39,6 +41,7 @@ on:
       - ocppsigen2mqtt/**
       - sigenevcloud2mqtt/**
       - sigenevlocal2mqtt/**
+      - sungrowmod2mqtt/**
       - .github/workflows/build-addons.yml
 
 permissions:
@@ -53,6 +56,7 @@ jobs:
       ocppsigen2mqtt: ${{ steps.filter.outputs.ocppsigen2mqtt }}
       sigenevcloud2mqtt: ${{ steps.filter.outputs.sigenevcloud2mqtt }}
       sigenevlocal2mqtt: ${{ steps.filter.outputs.sigenevlocal2mqtt }}
+      sungrowmod2mqtt: ${{ steps.filter.outputs.sungrowmod2mqtt }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -70,6 +74,9 @@ jobs:
               - '.github/workflows/build-addons.yml'
             sigenevlocal2mqtt:
               - 'sigenevlocal2mqtt/**'
+              - '.github/workflows/build-addons.yml'
+            sungrowmod2mqtt:
+              - 'sungrowmod2mqtt/**'
               - '.github/workflows/build-addons.yml'
 
   prepare:
@@ -98,12 +105,14 @@ jobs:
               add_item ocppsigen2mqtt addon-ocppsigen2mqtt
               add_item sigenevcloud2mqtt addon-sigenevcloud2mqtt
               add_item sigenevlocal2mqtt addon-sigenevlocal2mqtt
+              add_item sungrowmod2mqtt addon-sungrowmod2mqtt
             else
               case "$selected" in
                 modqtt) add_item modqtt addon-modqtt ;;
                 ocppsigen2mqtt) add_item ocppsigen2mqtt addon-ocppsigen2mqtt ;;
                 sigenevcloud2mqtt) add_item sigenevcloud2mqtt addon-sigenevcloud2mqtt ;;
                 sigenevlocal2mqtt) add_item sigenevlocal2mqtt addon-sigenevlocal2mqtt ;;
+                sungrowmod2mqtt) add_item sungrowmod2mqtt addon-sungrowmod2mqtt ;;
               esac
             fi
           else
@@ -118,6 +127,9 @@ jobs:
             fi
             if [ "${{ needs.changes.outputs.sigenevlocal2mqtt }}" = "true" ]; then
               add_item sigenevlocal2mqtt addon-sigenevlocal2mqtt
+            fi
+            if [ "${{ needs.changes.outputs.sungrowmod2mqtt }}" = "true" ]; then
+              add_item sungrowmod2mqtt addon-sungrowmod2mqtt
             fi
           fi
 
@@ -134,15 +146,17 @@ jobs:
         (github.event_name == 'workflow_dispatch' &&
           (github.event.inputs.addon == '' ||
            github.event.inputs.addon == 'sigenevcloud2mqtt' ||
-           github.event.inputs.addon == 'sigenevlocal2mqtt'))
+           github.event.inputs.addon == 'sigenevlocal2mqtt' ||
+           github.event.inputs.addon == 'sungrowmod2mqtt'))
         || needs.changes.outputs.sigenevcloud2mqtt == 'true'
         || needs.changes.outputs.sigenevlocal2mqtt == 'true'
+        || needs.changes.outputs.sungrowmod2mqtt == 'true'
       }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        slug: [sigenevcloud2mqtt, sigenevlocal2mqtt]
+        slug: [sigenevcloud2mqtt, sigenevlocal2mqtt, sungrowmod2mqtt]
     defaults:
       run:
         working-directory: ${{ matrix.slug }}
