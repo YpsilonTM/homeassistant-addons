@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+### Deprecated
+- Add-on marked deprecated (`stage: deprecated`). Prefer [Sigen EV Local to MQTT](../sigenevlocal2mqtt/DOCS.md) for charger control.
+
 ## 0.3.1
 
 - Fix configuration validation: `mqtt_port` is an optional integer again (`int?`), not a string — saved configs with `1883` no longer fail schema checks

@@ -24,9 +24,9 @@ hassaddons/
 | Slug | Image | Description |
 |------|-------|-------------|
 | `modqtt` | `ghcr.io/ypsilontm/hassaddons/addon-modqtt` | Modbus TCP → MQTT bridge |
-| `ocppsigen2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-ocppsigen2mqtt` | OCPP 1.6 → MQTT for Sigen EV |
-| `sigenevcloud2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-sigenevcloud2mqtt` | Sigenergy cloud → MQTT for Sigen EV |
 | `sigenevlocal2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-sigenevlocal2mqtt` | Sigenergy local NearTerminal → MQTT for Sigen EV |
+| `ocppsigen2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-ocppsigen2mqtt` | **Deprecated** — OCPP 1.6 → MQTT for Sigen EV |
+| `sigenevcloud2mqtt` | `ghcr.io/ypsilontm/hassaddons/addon-sigenevcloud2mqtt` | **Deprecated** — Sigenergy cloud → MQTT for Sigen EV |
 
 ## How Home Assistant uses this repo
 
@@ -37,8 +37,8 @@ hassaddons/
 
 ## Local development
 
-- **Python add-ons** (`modqtt`, `sigenevcloud2mqtt`, `sigenevlocal2mqtt`): venv + `.env` (see each add-on’s `.env.example`).
-- **Bun add-on** (`ocppsigen2mqtt`): `bun install` in the add-on folder + `.env.example`.
+- **Python add-ons** (`modqtt`, `sigenevlocal2mqtt`; deprecated: `sigenevcloud2mqtt`): venv + `.env` (see each add-on’s `.env.example`).
+- **Bun add-on** (deprecated: `ocppsigen2mqtt`): `bun install` in the add-on folder + `.env.example`.
 - **HA Supervisor devcontainer**: `.devcontainer/` mounts this repo into a local Supervisor instance.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for release and CI notes.

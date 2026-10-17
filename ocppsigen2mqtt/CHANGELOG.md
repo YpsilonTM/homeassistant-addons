@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Added `state_class: measurement` to power and current sensors for improved Home Assistant Energy Dashboard compatibility.
 
+## [1.0.2] - 2026-10-17
+
+### Deprecated
+- Add-on marked deprecated (`stage: deprecated`). Prefer [Sigen EV Local to MQTT](../sigenevlocal2mqtt/DOCS.md) for charger control.
+
 ## [1.0.1] - 2026-06-11
 
 ## [1.0.0] - 2026-06-10

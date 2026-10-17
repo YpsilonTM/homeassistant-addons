@@ -1,7 +1,7 @@
-name: OCPP SIGEN to MQTT
+name: OCPP SIGEN to MQTT [deprecated]
 slug: ocppsigen2mqtt
-description: OCPP 1.6 central system bridge – accepts charge point connections and exposes start/stop/status via MQTT for Home Assistant
-version: 1.0.1
+description: Deprecated – use Sigen EV Local to MQTT instead. OCPP 1.6 central system bridge for Sigen EV chargers.
+version: 1.0.2
 image: ghcr.io/ypsilontm/hassaddons/addon-ocppsigen2mqtt
 url: https://github.com/YpsilonTM/hassaddons
 arch:
@@ -10,6 +10,7 @@ arch:
 startup: application
 boot: auto
 init: false
+stage: deprecated
 map:
   - data:rw
 ports:

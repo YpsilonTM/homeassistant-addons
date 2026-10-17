@@ -4,7 +4,7 @@ Unofficial and **not affiliated with Sigenergy**. This add-on is a community Hom
 
 Bridge a standalone Sigen EV AC charger over the LAN NearTerminal path (TCP 21319) to MQTT, with Home Assistant discovery for the full firmware signal catalog.
 
-This add-on is independent of **Sigen EV Cloud to MQTT**. Both can run at the same time because they use different topic prefixes and device ids.
+This is the recommended Sigen EV bridge. The older **Sigen EV Cloud to MQTT** and **OCPP SIGEN to MQTT** add-ons are deprecated; migrate here when ready. Topic prefixes and device ids differ, so you can run this alongside a deprecated add-on during cutover.
 
 ## Features
 

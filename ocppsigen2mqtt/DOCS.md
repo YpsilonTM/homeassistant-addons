@@ -1,5 +1,9 @@
 # OCPP SIGEN to MQTT – Add-on Documentation
 
+> **Deprecated.** This add-on is no longer maintained. Use
+> [Sigen EV Local to MQTT](../sigenevlocal2mqtt/DOCS.md) instead — local
+> NearTerminal control is the recommended way to steer the charger.
+
 ## What it does
 
 This add-on starts an OCPP 1.6 central system (WebSocket server).  Your EV

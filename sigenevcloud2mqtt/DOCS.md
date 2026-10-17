@@ -1,5 +1,9 @@
 # Sigen EV Cloud to MQTT
 
+> **Deprecated.** This add-on is no longer maintained. Use
+> [Sigen EV Local to MQTT](../sigenevlocal2mqtt/DOCS.md) instead — local
+> NearTerminal control is the recommended way to steer the charger.
+
 Bridge Sigenergy cloud APIs for a standalone Sigen EV AC charger to MQTT, with Home Assistant discovery.
 
 ## Features
@@ -123,6 +127,8 @@ Probe helpers (dev only):
 .venv/bin/python scripts/probe_advanced_setting.py
 ```
 
-## Replacing `ocppsigen2mqtt`
+## Migration
 
-This add-on now covers start/stop, status, and live telemetry via cloud. To fully drop OCPP, point the charger back to default Sigenergy Cloud (not a local OCPP URL) so cloud start/stop works.
+Both this add-on and `ocppsigen2mqtt` are deprecated in favor of
+[Sigen EV Local to MQTT](../sigenevlocal2mqtt/DOCS.md). Install that add-on,
+point it at the charger’s LAN IP, and stop this one when ready.

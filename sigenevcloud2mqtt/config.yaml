@@ -1,7 +1,7 @@
-name: Sigen EV Cloud to MQTT
+name: Sigen EV Cloud to MQTT [deprecated]
 slug: sigenevcloud2mqtt
-description: Sigenergy cloud bridge for Sigen EV AC – current, start/stop, status, telemetry, and phase mode via MQTT for Home Assistant
-version: 0.3.1
+description: Deprecated – use Sigen EV Local to MQTT instead. Sigenergy cloud bridge for Sigen EV AC.
+version: 0.3.2
 image: ghcr.io/ypsilontm/hassaddons/addon-sigenevcloud2mqtt
 url: https://github.com/YpsilonTM/hassaddons
 arch:
@@ -10,6 +10,7 @@ arch:
 startup: application
 boot: auto
 init: false
+stage: deprecated
 services:
   - mqtt:want
 options:
