@@ -13,6 +13,10 @@ from src.enums import encode_enum, enum_options
 
 LOGGER = logging.getLogger(__name__)
 
+UNIT_NORMALIZE = {
+    "℃": "°C",
+    "C": "°C",
+}
 UNIT_DEVICE_CLASS = {
     "A": "current",
     "V": "voltage",
@@ -23,9 +27,19 @@ UNIT_DEVICE_CLASS = {
     "℃": "temperature",
     "°C": "temperature",
     "C": "temperature",
+    "s": "duration",
 }
 ENERGY_TOTAL_INCREASING = {11350, 1330, 1334, 1338}
 ENERGY_TOTAL = {11298}
+DURATION_TAGS = {11300, 11354}  # session_duration, lifetime_duration
+# Keep these out of the Controls card (primary control is charge current).
+CONFIG_CATEGORY_TAGS = {
+    12103,  # charge_power_fixed
+    12105,  # charge_power_percent
+    12116,  # house_breaker_current
+    12118,  # pole_breaker_current
+    12270,  # dlm_mode (raw until enum is known)
+}
 CURRENT_TAG = 12194
 START_STOP_TAG = 12000
 START_VALUE = 0
@@ -293,19 +307,6 @@ class MqttBridge:
         availability = {"topic": self.availability_topic}
         configs: list[tuple[str, dict[str, Any]]] = [
             (
-                f"homeassistant/sensor/{self.device_id}_power/config",
-                {
-                    "name": "Charging Power",
-                    "unique_id": f"{self.device_id}_power",
-                    "state_topic": self.power_topic,
-                    "availability": [availability],
-                    "unit_of_measurement": "W",
-                    "device_class": "power",
-                    "state_class": "measurement",
-                    "device": device,
-                },
-            ),
-            (
                 f"homeassistant/sensor/{self.device_id}_current_meas/config",
                 {
                     "name": "Charging Current",
@@ -388,11 +389,15 @@ class MqttBridge:
         for topic, payload in configs:
             self.publish(topic, json.dumps(payload), retain=True)
 
+        # Drop the old synthetic W power sensor (duplicates catalog charge_power in kW).
+        self.publish(f"homeassistant/sensor/{self.device_id}_power/config", "", retain=True)
+
         self._discovery_published = True
         LOGGER.info("mqtt_discovery_published device_id=%s entities=%s", self.device_id, len(configs))
 
     def _tag_discovery(self, tag: Tag, device: dict[str, Any], availability: dict[str, str]) -> tuple[str, dict[str, Any]]:
         unique_id = f"{self.device_id}_{tag.slug}"
+        unit = UNIT_NORMALIZE.get(tag.unit, tag.unit) if tag.unit else ""
         payload: dict[str, Any] = {
             "name": tag.name,
             "unique_id": unique_id,
@@ -401,11 +406,14 @@ class MqttBridge:
             "enabled_by_default": tag.enabled_by_default and not tag.secret,
             "object_id": f"{self.device_id}_{tag.slug}",
         }
-        if tag.secret or not tag.enabled_by_default:
+        if tag.secret or not tag.enabled_by_default or tag.id in CONFIG_CATEGORY_TAGS:
             payload["entity_category"] = "diagnostic" if tag.access == "RO" else "config"
-        if tag.unit:
-            payload["unit_of_measurement"] = tag.unit
-        device_class = UNIT_DEVICE_CLASS.get(tag.unit)
+        if unit:
+            payload["unit_of_measurement"] = unit
+        device_class = UNIT_DEVICE_CLASS.get(unit) or UNIT_DEVICE_CLASS.get(tag.unit)
+        if tag.id in DURATION_TAGS:
+            device_class = "duration"
+            payload["unit_of_measurement"] = "s"
         if device_class:
             payload["device_class"] = device_class
         if tag.id in ENERGY_TOTAL_INCREASING:
@@ -427,10 +435,11 @@ class MqttBridge:
                     "step": 1,
                     "mode": "slider",
                     "icon": "mdi:current-ac",
-                    "entity_category": "config",
                     "enabled_by_default": True,
                 }
             )
+            # Primary control: leave entity_category unset so HA shows it under Controls.
+            payload.pop("entity_category", None)
             payload.pop("state_class", None)
             return f"homeassistant/number/{unique_id}/config", payload
 

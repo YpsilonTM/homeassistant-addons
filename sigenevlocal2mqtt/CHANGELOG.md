@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4
+
+- Hide raw `DLM mode` by default until value names are known
+- Drop duplicate synthetic `Charging Power` (W); keep catalog `Active charge power` (kW)
+- Clarify charge-power names (`Active charge power` vs `Charge power limit (%)` / fixed)
+- Put charge-current slider under Controls; move power limits / breakers / DLM to Config
+- Publish session/lifetime duration with `device_class: duration`
+- Normalize temperature unit `℃` → `°C` so cable/internal temps discover in HA
+
 ## 0.1.3
 
 - Mode / status enums publish names instead of raw flags (`auth_mode`, `work_mode`, `control_mode`, `output_mode`, `dlm_enable`, `run_state`, `plug_status`, …)

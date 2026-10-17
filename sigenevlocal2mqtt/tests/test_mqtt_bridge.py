@@ -89,11 +89,47 @@ def test_discovery_hides_dangerous_by_default(bridge: MqttBridge) -> None:
     assert current["min"] == 6
     assert current["max"] == 16
     assert current["command_topic"] == "sigen_evac_local/current/set"
+    assert "entity_category" not in current
     start = by_topic[f"homeassistant/button/{bridge.device_id}_start/config"]
     stop = by_topic[f"homeassistant/button/{bridge.device_id}_stop/config"]
     assert start["payload_press"] == "START"
     assert stop["payload_press"] == "STOP"
     assert not any("charge_start_stop" in topic for topic in topics)
+
+
+def test_discovery_ux_cleanup(bridge: MqttBridge) -> None:
+    bridge.publish_discovery()
+    client: FakeMqttClient = bridge._client  # type: ignore[assignment]
+    by_topic = {topic: json.loads(payload) for topic, payload, _ in client.published if payload}
+    # Tombstone duplicate synthetic W power sensor
+    assert (f"homeassistant/sensor/{bridge.device_id}_power/config", "", True) in client.published
+    assert f"homeassistant/sensor/{bridge.device_id}_power/config" not in by_topic
+
+    active = by_topic[f"homeassistant/sensor/{bridge.device_id}_charge_power/config"]
+    assert active["name"] == "Active charge power"
+    assert active["unit_of_measurement"] == "kW"
+
+    percent = by_topic[f"homeassistant/number/{bridge.device_id}_charge_power_percent/config"]
+    assert percent["name"] == "Charge power limit (%)"
+    assert percent["entity_category"] == "config"
+
+    fixed = by_topic[f"homeassistant/number/{bridge.device_id}_charge_power_fixed/config"]
+    assert fixed["name"] == "Charge power limit (fixed)"
+    assert fixed["entity_category"] == "config"
+
+    dlm = by_topic[f"homeassistant/number/{bridge.device_id}_dlm_mode/config"]
+    assert dlm["enabled_by_default"] is False
+    assert dlm["entity_category"] == "config"
+
+    session = by_topic[f"homeassistant/sensor/{bridge.device_id}_session_duration/config"]
+    assert session["device_class"] == "duration"
+    lifetime = by_topic[f"homeassistant/sensor/{bridge.device_id}_lifetime_duration/config"]
+    assert lifetime["device_class"] == "duration"
+
+    cable = by_topic[f"homeassistant/sensor/{bridge.device_id}_cable_temp/config"]
+    assert cable["unit_of_measurement"] == "°C"
+    assert cable["device_class"] == "temperature"
+    assert cable["enabled_by_default"] is True
 
 
 def test_discovery_includes_dangerous_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:

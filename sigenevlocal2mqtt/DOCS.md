@@ -63,6 +63,7 @@ Prefix default: `sigen_evac_local`
 | Control mode | `local`, `ocpp` |
 | Output mode | `1_phase`, `3_phase`, `3_phase_4wire`, `biphase` |
 | DLM enable | `off`, `on` |
+| DLM mode | hidden by default (raw enum; names TBD) |
 | Single-phase sequence | `L1`, `L2`, `L3`, `system_automatic` |
 | Run state | `unplugged`, `plugged`, `preparing`, `charging`, `fault`, `reserving`, `occupied_a`/`_b`/`_c`, `unavailable`, `offline` |
 | Plug status | `unplugged`, `plugged` |
