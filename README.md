@@ -15,6 +15,7 @@ Add this URL under **Settings → Add-ons → Add-on store → ⋮ → Repositor
 | **ModQTT** | Modbus TCP → MQTT bridge | [DOCS.md](modqtt/DOCS.md) |
 | **OCPP SIGEN to MQTT** | OCPP 1.6 central system for Sigen EV chargers | [DOCS.md](ocppsigen2mqtt/DOCS.md) |
 | **Sigen EV Cloud to MQTT** | Sigenergy cloud control (current, start/stop, phase mode) | [DOCS.md](sigenevcloud2mqtt/DOCS.md) |
+| **Sigen EV Local to MQTT** | Unofficial local NearTerminal control (full EVAC catalog). Not affiliated with Sigenergy. | [DOCS.md](sigenevlocal2mqtt/DOCS.md) |
 
 Pre-built images: `ghcr.io/ypsilontm/hassaddons/addon-<slug>`
 
