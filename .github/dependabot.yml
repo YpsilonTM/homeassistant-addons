@@ -4,23 +4,40 @@ updates:
     directory: /sigenevlocal2mqtt
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      python-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: pip
     directory: /sungrowmod2mqtt
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      python-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /sigenevlocal2mqtt
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
 
   - package-ecosystem: docker
     directory: /sungrowmod2mqtt
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
