@@ -50,3 +50,371 @@ configuration:
   log_level:
     name: Log level
     description: Verbosity of add-on logs.
+  # BEGIN GENERATED REGISTERS
+  registers:
+    name: Registers
+    description: >-
+      Choose which registers to poll from the inverter and publish to Home Assistant.
+      Turned-off registers are not read over Modbus and are not created as entities.
+      Defaults match the previous core sensor set.
+    backup:
+      name: Backup
+      phase_a_backup_current:
+        name: Phase A Backup Current (A)
+      phase_b_backup_current:
+        name: Phase B Backup Current (A)
+      phase_c_backup_current:
+        name: Phase C Backup Current (A)
+      phase_a_backup_power:
+        name: Phase A Backup Power (W)
+      phase_b_backup_power:
+        name: Phase B Backup Power (W)
+      phase_c_backup_power:
+        name: Phase C Backup Power (W)
+      total_backup_power:
+        name: Total Backup Power (W)
+      phase_a_backup_voltage:
+        name: Phase A Backup Voltage (V)
+      phase_b_backup_voltage:
+        name: Phase B Backup Voltage (V)
+      phase_c_backup_voltage:
+        name: Phase C Backup Voltage (V)
+      backup_frequency:
+        name: Backup Frequency (Hz)
+    battery:
+      name: Battery
+      battery_power:
+        name: Battery Power (W)
+      bdc_rated_power:
+        name: BDC Rated Power (kW)
+      battery_current:
+        name: Battery Current (A)
+      max_charging_current_bms:
+        name: Max Charging Current (BMS) (A)
+      max_discharging_current_bms:
+        name: Max Discharging Current (BMS) (A)
+      battery_capacity_high_precision:
+        name: Battery Capacity (High Precision) (kWh)
+      daily_battery_charge_from_pv:
+        name: Daily Battery Charge from PV (kWh)
+      total_battery_charge_from_pv:
+        name: Total Battery Charge from PV (kWh)
+      battery_voltage:
+        name: Battery Voltage (V)
+      battery_current_legacy:
+        name: Battery Current (Legacy) (A)
+      battery_power_legacy:
+        name: Battery Power (Legacy) (W)
+      battery_soc:
+        name: "Battery SOC (%)"
+      battery_soh:
+        name: "Battery SOH (%)"
+      battery_temperature:
+        name: Battery Temperature (°C)
+      daily_battery_discharge:
+        name: Daily Battery Discharge (kWh)
+      total_battery_discharge:
+        name: Total Battery Discharge (kWh)
+      battery_capacity:
+        name: Battery Capacity (kWh)
+      daily_battery_charge:
+        name: Daily Battery Charge (kWh)
+      total_battery_charge:
+        name: Total Battery Charge (kWh)
+    clock:
+      name: Clock
+      clock_year:
+        name: System Clock Year
+      clock_month:
+        name: System Clock Month
+      clock_day:
+        name: System Clock Day
+      clock_hour:
+        name: System Clock Hour
+      clock_minute:
+        name: System Clock Minute
+      clock_second:
+        name: System Clock Second
+    control:
+      name: Control
+      start_stop:
+        name: Start/Stop
+    ems:
+      name: EMS
+      forced_startup_low_soc:
+        name: Forced Startup Under Low SOC Standby
+      pv_power_limitation:
+        name: PV Power Limitation
+      ems_mode:
+        name: EMS Mode
+      charge_discharge_command:
+        name: Charge/Discharge Command
+      charge_discharge_power:
+        name: Charge/Discharge Power (W)
+      battery_max_soc:
+        name: "Battery Max SOC (%)"
+      battery_min_soc:
+        name: "Battery Min SOC (%)"
+      off_grid_option:
+        name: "Off-grid Option"
+      external_ems_heartbeat:
+        name: External EMS Heartbeat (s)
+      battery_reserved_soc_for_backup:
+        name: "Reserved SOC for Backup (%)"
+      charge_cutoff_voltage_wide:
+        name: Charge Cutoff Voltage (Wide) (V)
+      max_charging_power:
+        name: Max Charging Power (kW)
+      max_discharging_power:
+        name: Max Discharging Power (kW)
+      charge_discharge_power_wide:
+        name: Charge/Discharge Power (Wide) (kW)
+      forced_charging:
+        name: Forced Charging
+      forced_charging_valid_time:
+        name: Forced Charging Valid Time
+      forced_charging_start_1_h:
+        name: Forced Charging Start 1 Hour
+      forced_charging_start_1_min:
+        name: Forced Charging Start 1 Minute
+      forced_charging_end_1_h:
+        name: Forced Charging End 1 Hour
+      forced_charging_end_1_min:
+        name: Forced Charging End 1 Minute
+      forced_charging_target_soc_1:
+        name: "Forced Charging Target SOC 1 (%)"
+      forced_charging_start_2_h:
+        name: Forced Charging Start 2 Hour
+      forced_charging_start_2_min:
+        name: Forced Charging Start 2 Minute
+      forced_charging_end_2_h:
+        name: Forced Charging End 2 Hour
+      forced_charging_end_2_min:
+        name: Forced Charging End 2 Minute
+      forced_charging_target_soc_2:
+        name: "Forced Charging Target SOC 2 (%)"
+    energy:
+      name: Energy
+      daily_output_energy:
+        name: Daily Output Energy (kWh)
+      total_output_energy:
+        name: Total Output Energy (kWh)
+      daily_pv_generation:
+        name: Daily PV Generation (kWh)
+      total_pv_generation:
+        name: Total PV Generation (kWh)
+      daily_export_from_pv:
+        name: Daily Export Energy from PV (kWh)
+      total_export_from_pv:
+        name: Total Export Energy from PV (kWh)
+      daily_direct_energy_consumption:
+        name: Daily Direct Energy Consumption (kWh)
+      total_direct_energy_consumption:
+        name: Total Direct Energy Consumption (kWh)
+      self_consumption_today:
+        name: "Self-Consumption Today (%)"
+      daily_import_energy:
+        name: Daily Import Energy (kWh)
+      total_import_energy:
+        name: Total Import Energy (kWh)
+      daily_export_energy:
+        name: Daily Export Energy (kWh)
+      total_export_energy:
+        name: Total Export Energy (kWh)
+    export_limit:
+      name: Export limit
+      min_feed_in_limitation_value:
+        name: "Min Feed-in Power Limitation (kW)"
+      max_feed_in_limitation_value:
+        name: "Max Feed-in Power Limitation (kW)"
+      feed_in_limitation_value:
+        name: "Feed-in Limitation Value (W)"
+      feed_in_limitation:
+        name: "Feed-in Limitation"
+      feed_in_limitation_ratio:
+        name: "Feed-in Limitation Ratio (%)"
+      active_power_limitation:
+        name: Active Power Limitation
+      active_power_limit_ratio:
+        name: "Active Power Limit Ratio (%)"
+      feed_in_limitation_value_wide:
+        name: "Feed-in Limitation Value (Wide) (kW)"
+    faults:
+      name: Faults
+      inverter_alarm:
+        name: Inverter Alarm
+      grid_side_fault:
+        name: "Grid-side Fault"
+      system_fault_1:
+        name: System Fault 1
+      system_fault_2:
+        name: System Fault 2
+      dc_side_fault:
+        name: "DC-side Fault"
+      permanent_fault:
+        name: Permanent Fault
+      bdc_side_fault:
+        name: "BDC-side Fault"
+      bdc_side_permanent_fault:
+        name: "BDC-side Permanent Fault"
+      battery_fault:
+        name: Battery Fault
+      battery_alarm:
+        name: Battery Alarm
+      bms_alarm:
+        name: BMS Alarm
+      bms_protection:
+        name: BMS Protection
+      bms_fault_1:
+        name: BMS Fault 1
+      bms_fault_2:
+        name: BMS Fault 2
+      bms_alarm_2:
+        name: BMS Alarm 2
+    firmware:
+      name: Firmware
+      arm_cert_version:
+        name: ARM Certification Version
+      dsp_cert_version:
+        name: DSP Certification Version
+      inverter_firmware:
+        name: Inverter Firmware
+      comm_module_firmware:
+        name: Communication Module Firmware
+      battery_firmware:
+        name: Battery Firmware
+    grid:
+      name: Grid
+      phase_a_voltage:
+        name: Phase A Voltage (V)
+      phase_b_voltage:
+        name: Phase B Voltage (V)
+      phase_c_voltage:
+        name: Phase C Voltage (V)
+      reactive_power:
+        name: Reactive Power (var)
+      power_factor:
+        name: Power Factor
+      grid_frequency_coarse:
+        name: Grid Frequency (0.1 Hz) (Hz)
+      grid_frequency:
+        name: Grid Frequency (Hz)
+      phase_a_current:
+        name: Phase A Current (A)
+      phase_b_current:
+        name: Phase B Current (A)
+      phase_c_current:
+        name: Phase C Current (A)
+    identity:
+      name: Identity
+      protocol_version:
+        name: Protocol Version
+      serial_number:
+        name: Serial Number
+      device_type_code:
+        name: Device Type Code
+      nominal_output_power:
+        name: Nominal Output Power (kW)
+      output_type:
+        name: Output Type
+    load_control:
+      name: Load control
+      do_configuration:
+        name: DO Configuration
+      load_control_mode:
+        name: Load Control Mode
+      load_timing_1_start_hour:
+        name: Load Timing 1 Start Hour
+      load_timing_1_start_minute:
+        name: Load Timing 1 Start Minute
+      load_timing_1_end_hour:
+        name: Load Timing 1 End Hour
+      load_timing_1_end_minute:
+        name: Load Timing 1 End Minute
+      load_timing_2_start_hour:
+        name: Load Timing 2 Start Hour
+      load_timing_2_start_minute:
+        name: Load Timing 2 Start Minute
+      load_timing_2_end_hour:
+        name: Load Timing 2 End Hour
+      load_timing_2_end_minute:
+        name: Load Timing 2 End Minute
+      load_on_off_mode:
+        name: Load ON/OFF Mode
+      load_opt_start_hour:
+        name: Load Optimized Start Hour
+      load_opt_start_minute:
+        name: Load Optimized Start Minute
+      load_opt_end_hour:
+        name: Load Optimized End Hour
+      load_opt_end_minute:
+        name: Load Optimized End Minute
+      optimized_power_of_load:
+        name: Optimized Power of Load (W)
+      load_rated_power:
+        name: Load Rated Power (kW)
+    meter:
+      name: Meter
+      meter_active_power:
+        name: Meter Active Power (W)
+      meter_phase_a_power:
+        name: Meter Phase A Active Power (W)
+      meter_phase_b_power:
+        name: Meter Phase B Active Power (W)
+      meter_phase_c_power:
+        name: Meter Phase C Active Power (W)
+      meter_comm_detection:
+        name: Meter Comm Detection
+    meter_ch2:
+      name: Meter channel 2
+      meter_ch2_total_power:
+        name: Meter Channel 2 Total Active Power (W)
+      meter_ch2_phase_a_power:
+        name: Meter Channel 2 Phase A Power (W)
+      meter_ch2_phase_b_power:
+        name: Meter Channel 2 Phase B Power (W)
+      meter_ch2_phase_c_power:
+        name: Meter Channel 2 Phase C Power (W)
+    mppt:
+      name: MPPT
+      mppt1_voltage:
+        name: MPPT1 Voltage (V)
+      mppt1_current:
+        name: MPPT1 Current (A)
+      mppt2_voltage:
+        name: MPPT2 Voltage (V)
+      mppt2_current:
+        name: MPPT2 Current (A)
+    mppt3_4:
+      name: MPPT 3/4
+      mppt3_voltage:
+        name: MPPT3 Voltage (V)
+      mppt3_current:
+        name: MPPT3 Current (A)
+      mppt4_voltage:
+        name: MPPT4 Voltage (V)
+      mppt4_current:
+        name: MPPT4 Current (A)
+    power:
+      name: Power
+      total_dc_power:
+        name: Total DC Power (W)
+      load_power:
+        name: Load Power (W)
+      export_power:
+        name: Export Power (W)
+      total_active_power:
+        name: Total Active Power (W)
+    status:
+      name: Status
+      running_state:
+        name: Running State
+      power_flow_status:
+        name: Power Flow Status
+      drm_state:
+        name: DRM State
+    thermal:
+      name: Thermal
+      inverter_temperature:
+        name: Inverter Temperature (°C)
+  # END GENERATED REGISTERS

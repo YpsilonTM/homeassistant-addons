@@ -24,6 +24,14 @@ def opt(key, default=""):
     value = options.get(key, default)
     return "" if value is None else value
 
+registers = options.get('registers') or {}
+toggles = {}
+if isinstance(registers, dict):
+    for group in registers.values():
+        if isinstance(group, dict):
+            for slug, enabled in group.items():
+                toggles[str(slug)] = bool(enabled)
+
 env_map = {
     'MODBUS_HOST': opt('modbus_host'),
     'MODBUS_PORT': opt('modbus_port', 502),
@@ -42,6 +50,7 @@ env_map = {
     'MQTT_TOPIC_PREFIX': opt('topic_prefix', 'sungrowmod2mqtt'),
     'DEVICE_NAME': opt('device_name', 'Sungrow Inverter'),
     'LOG_LEVEL': opt('log_level', 'INFO'),
+    'REGISTER_TOGGLES': json.dumps(toggles, separators=(',', ':')),
 }
 
 for key, value in env_map.items():

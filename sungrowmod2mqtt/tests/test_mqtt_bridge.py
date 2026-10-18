@@ -14,6 +14,10 @@ def registers():
     return registers
 
 
+def _all_slugs(registers) -> set[str]:
+    return {reg.slug for reg in registers}
+
+
 def _bridge(registers, **kwargs) -> MqttBridge:
     defaults = dict(
         host="localhost",
@@ -23,6 +27,7 @@ def _bridge(registers, **kwargs) -> MqttBridge:
         device_id="sungrow_SERIAL0000001",
         legacy_modqtt_compat=False,
         allow_writes=False,
+        enabled_slugs=_all_slugs(registers),
     )
     defaults.update(kwargs)
     return MqttBridge(**defaults)  # type: ignore[arg-type]
@@ -146,6 +151,44 @@ def test_writes_gated_hides_ems_controls(registers) -> None:
     visible_off = {reg.slug for reg in bridge_off.visible_registers()}
     assert "clock_year" not in visible_off
     assert "total_dc_power" in visible_off
+
+
+def test_disabled_register_is_stubbed_and_not_visible(registers) -> None:
+    enabled = {reg.slug for reg in registers if reg.enabled_by_default}
+    bridge = _bridge(registers, enabled_slugs=enabled)
+    payload = bridge.build_device_discovery()
+
+    assert "battery_soc" not in enabled
+    assert payload["cmps"]["battery_soc"] == {"p": "sensor"}
+    assert "battery_soc" not in {reg.slug for reg in bridge.visible_registers()}
+
+    total = payload["cmps"]["total_dc_power"]
+    assert "unique_id" in total
+    assert total["enabled_by_default"] is True
+
+
+def test_toggle_on_holding_still_gated_by_allow_writes(registers) -> None:
+    bridge = _bridge(
+        registers,
+        allow_writes=False,
+        enable_ems_writes=False,
+        enabled_slugs={"ems_mode", "total_dc_power"},
+    )
+    assert bridge.build_device_discovery()["cmps"]["ems_mode"] == {"p": "select"}
+    assert not bridge.write_allowed(next(r for r in registers if r.slug == "ems_mode"))
+
+
+def test_clear_disabled_retained_state(registers) -> None:
+    enabled = {"total_dc_power"}
+    bridge = _bridge(registers, enabled_slugs=enabled)
+    bridge._connected.set()
+    bridge._client = MagicMock()
+    bridge._client.publish.return_value = MagicMock(rc=0)
+
+    bridge.clear_disabled_retained_state()
+    topics = [call.args[0] for call in bridge._client.publish.call_args_list]
+    assert bridge.state_topic_for(next(r for r in registers if r.slug == "battery_soc")) in topics
+    assert bridge.state_topic_for(next(r for r in registers if r.slug == "total_dc_power")) not in topics
 
 
 def test_daily_state_class_total_increasing(registers) -> None:

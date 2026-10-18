@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Per-register toggles in add-on options (grouped by catalog category). Defaults match the previous core `enabled_by_default` set; turned-off registers are neither polled nor published to Home Assistant.
+- Recover from WiNet TCP drops: on `BrokenPipeError` / connection reset / pymodbus connection errors, close the socket, reconnect, and retry the read once instead of looping forever on a dead session.
+- Pace Modbus requests (~50 ms between calls). Sungrow WiNet resets the session under back-to-back bursts.
+
 ## 0.2.1
 
 - Fix boot crash: load options from `/data/options.json` again. `bashio::config` was forbidden on Supervisor API and left `MODBUS_HOST` empty.

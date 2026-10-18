@@ -1,7 +1,7 @@
 name: Sungrow Modbus to MQTT
 slug: sungrowmod2mqtt
 description: Unofficial Sungrow hybrid inverter Modbus TCP → MQTT bridge. Not affiliated with Sungrow.
-version: 0.2.1
+version: 0.3.0
 image: ghcr.io/ypsilontm/homeassistant-addons/addon-sungrowmod2mqtt
 url: https://github.com/YpsilonTM/homeassistant-addons
 arch:
@@ -30,6 +30,189 @@ options:
   topic_prefix: sungrowmod2mqtt
   device_name: Sungrow Inverter
   log_level: INFO
+  # BEGIN GENERATED REGISTERS
+  registers:
+    backup:
+      phase_a_backup_current: false
+      phase_b_backup_current: false
+      phase_c_backup_current: false
+      phase_a_backup_power: false
+      phase_b_backup_power: false
+      phase_c_backup_power: false
+      total_backup_power: false
+      phase_a_backup_voltage: false
+      phase_b_backup_voltage: false
+      phase_c_backup_voltage: false
+      backup_frequency: false
+    battery:
+      battery_power: false
+      bdc_rated_power: false
+      battery_current: false
+      max_charging_current_bms: false
+      max_discharging_current_bms: false
+      battery_capacity_high_precision: false
+      daily_battery_charge_from_pv: false
+      total_battery_charge_from_pv: false
+      battery_voltage: false
+      battery_current_legacy: false
+      battery_power_legacy: false
+      battery_soc: false
+      battery_soh: false
+      battery_temperature: false
+      daily_battery_discharge: false
+      total_battery_discharge: false
+      battery_capacity: false
+      daily_battery_charge: false
+      total_battery_charge: false
+    clock:
+      clock_year: false
+      clock_month: false
+      clock_day: false
+      clock_hour: false
+      clock_minute: false
+      clock_second: false
+    control:
+      start_stop: false
+    ems:
+      forced_startup_low_soc: false
+      pv_power_limitation: false
+      ems_mode: false
+      charge_discharge_command: false
+      charge_discharge_power: false
+      battery_max_soc: false
+      battery_min_soc: false
+      off_grid_option: false
+      external_ems_heartbeat: false
+      battery_reserved_soc_for_backup: false
+      charge_cutoff_voltage_wide: false
+      max_charging_power: false
+      max_discharging_power: false
+      charge_discharge_power_wide: false
+      forced_charging: false
+      forced_charging_valid_time: false
+      forced_charging_start_1_h: false
+      forced_charging_start_1_min: false
+      forced_charging_end_1_h: false
+      forced_charging_end_1_min: false
+      forced_charging_target_soc_1: false
+      forced_charging_start_2_h: false
+      forced_charging_start_2_min: false
+      forced_charging_end_2_h: false
+      forced_charging_end_2_min: false
+      forced_charging_target_soc_2: false
+    energy:
+      daily_output_energy: false
+      total_output_energy: false
+      daily_pv_generation: true
+      total_pv_generation: true
+      daily_export_from_pv: false
+      total_export_from_pv: false
+      daily_direct_energy_consumption: false
+      total_direct_energy_consumption: false
+      self_consumption_today: false
+      daily_import_energy: false
+      total_import_energy: false
+      daily_export_energy: false
+      total_export_energy: false
+    export_limit:
+      min_feed_in_limitation_value: false
+      max_feed_in_limitation_value: false
+      feed_in_limitation_value: false
+      feed_in_limitation: false
+      feed_in_limitation_ratio: false
+      active_power_limitation: false
+      active_power_limit_ratio: false
+      feed_in_limitation_value_wide: false
+    faults:
+      inverter_alarm: false
+      grid_side_fault: false
+      system_fault_1: false
+      system_fault_2: false
+      dc_side_fault: false
+      permanent_fault: false
+      bdc_side_fault: false
+      bdc_side_permanent_fault: false
+      battery_fault: false
+      battery_alarm: false
+      bms_alarm: false
+      bms_protection: false
+      bms_fault_1: false
+      bms_fault_2: false
+      bms_alarm_2: false
+    firmware:
+      arm_cert_version: false
+      dsp_cert_version: false
+      inverter_firmware: false
+      comm_module_firmware: false
+      battery_firmware: false
+    grid:
+      phase_a_voltage: false
+      phase_b_voltage: false
+      phase_c_voltage: false
+      reactive_power: false
+      power_factor: false
+      grid_frequency_coarse: false
+      grid_frequency: true
+      phase_a_current: false
+      phase_b_current: false
+      phase_c_current: false
+    identity:
+      protocol_version: false
+      serial_number: true
+      device_type_code: true
+      nominal_output_power: true
+      output_type: false
+    load_control:
+      do_configuration: false
+      load_control_mode: false
+      load_timing_1_start_hour: false
+      load_timing_1_start_minute: false
+      load_timing_1_end_hour: false
+      load_timing_1_end_minute: false
+      load_timing_2_start_hour: false
+      load_timing_2_start_minute: false
+      load_timing_2_end_hour: false
+      load_timing_2_end_minute: false
+      load_on_off_mode: false
+      load_opt_start_hour: false
+      load_opt_start_minute: false
+      load_opt_end_hour: false
+      load_opt_end_minute: false
+      optimized_power_of_load: false
+      load_rated_power: false
+    meter:
+      meter_active_power: false
+      meter_phase_a_power: false
+      meter_phase_b_power: false
+      meter_phase_c_power: false
+      meter_comm_detection: false
+    meter_ch2:
+      meter_ch2_total_power: false
+      meter_ch2_phase_a_power: false
+      meter_ch2_phase_b_power: false
+      meter_ch2_phase_c_power: false
+    mppt:
+      mppt1_voltage: true
+      mppt1_current: true
+      mppt2_voltage: true
+      mppt2_current: true
+    mppt3_4:
+      mppt3_voltage: false
+      mppt3_current: false
+      mppt4_voltage: false
+      mppt4_current: false
+    power:
+      total_dc_power: true
+      load_power: true
+      export_power: true
+      total_active_power: true
+    status:
+      running_state: true
+      power_flow_status: false
+      drm_state: false
+    thermal:
+      inverter_temperature: true
+  # END GENERATED REGISTERS
 schema:
   modbus_host: str
   modbus_port: int(1,65535)
@@ -48,3 +231,186 @@ schema:
   topic_prefix: str
   device_name: str
   log_level: list(DEBUG|INFO|WARNING|ERROR)
+  # BEGIN GENERATED REGISTERS
+  registers:
+    backup:
+      phase_a_backup_current: bool?
+      phase_b_backup_current: bool?
+      phase_c_backup_current: bool?
+      phase_a_backup_power: bool?
+      phase_b_backup_power: bool?
+      phase_c_backup_power: bool?
+      total_backup_power: bool?
+      phase_a_backup_voltage: bool?
+      phase_b_backup_voltage: bool?
+      phase_c_backup_voltage: bool?
+      backup_frequency: bool?
+    battery:
+      battery_power: bool?
+      bdc_rated_power: bool?
+      battery_current: bool?
+      max_charging_current_bms: bool?
+      max_discharging_current_bms: bool?
+      battery_capacity_high_precision: bool?
+      daily_battery_charge_from_pv: bool?
+      total_battery_charge_from_pv: bool?
+      battery_voltage: bool?
+      battery_current_legacy: bool?
+      battery_power_legacy: bool?
+      battery_soc: bool?
+      battery_soh: bool?
+      battery_temperature: bool?
+      daily_battery_discharge: bool?
+      total_battery_discharge: bool?
+      battery_capacity: bool?
+      daily_battery_charge: bool?
+      total_battery_charge: bool?
+    clock:
+      clock_year: bool?
+      clock_month: bool?
+      clock_day: bool?
+      clock_hour: bool?
+      clock_minute: bool?
+      clock_second: bool?
+    control:
+      start_stop: bool?
+    ems:
+      forced_startup_low_soc: bool?
+      pv_power_limitation: bool?
+      ems_mode: bool?
+      charge_discharge_command: bool?
+      charge_discharge_power: bool?
+      battery_max_soc: bool?
+      battery_min_soc: bool?
+      off_grid_option: bool?
+      external_ems_heartbeat: bool?
+      battery_reserved_soc_for_backup: bool?
+      charge_cutoff_voltage_wide: bool?
+      max_charging_power: bool?
+      max_discharging_power: bool?
+      charge_discharge_power_wide: bool?
+      forced_charging: bool?
+      forced_charging_valid_time: bool?
+      forced_charging_start_1_h: bool?
+      forced_charging_start_1_min: bool?
+      forced_charging_end_1_h: bool?
+      forced_charging_end_1_min: bool?
+      forced_charging_target_soc_1: bool?
+      forced_charging_start_2_h: bool?
+      forced_charging_start_2_min: bool?
+      forced_charging_end_2_h: bool?
+      forced_charging_end_2_min: bool?
+      forced_charging_target_soc_2: bool?
+    energy:
+      daily_output_energy: bool?
+      total_output_energy: bool?
+      daily_pv_generation: bool?
+      total_pv_generation: bool?
+      daily_export_from_pv: bool?
+      total_export_from_pv: bool?
+      daily_direct_energy_consumption: bool?
+      total_direct_energy_consumption: bool?
+      self_consumption_today: bool?
+      daily_import_energy: bool?
+      total_import_energy: bool?
+      daily_export_energy: bool?
+      total_export_energy: bool?
+    export_limit:
+      min_feed_in_limitation_value: bool?
+      max_feed_in_limitation_value: bool?
+      feed_in_limitation_value: bool?
+      feed_in_limitation: bool?
+      feed_in_limitation_ratio: bool?
+      active_power_limitation: bool?
+      active_power_limit_ratio: bool?
+      feed_in_limitation_value_wide: bool?
+    faults:
+      inverter_alarm: bool?
+      grid_side_fault: bool?
+      system_fault_1: bool?
+      system_fault_2: bool?
+      dc_side_fault: bool?
+      permanent_fault: bool?
+      bdc_side_fault: bool?
+      bdc_side_permanent_fault: bool?
+      battery_fault: bool?
+      battery_alarm: bool?
+      bms_alarm: bool?
+      bms_protection: bool?
+      bms_fault_1: bool?
+      bms_fault_2: bool?
+      bms_alarm_2: bool?
+    firmware:
+      arm_cert_version: bool?
+      dsp_cert_version: bool?
+      inverter_firmware: bool?
+      comm_module_firmware: bool?
+      battery_firmware: bool?
+    grid:
+      phase_a_voltage: bool?
+      phase_b_voltage: bool?
+      phase_c_voltage: bool?
+      reactive_power: bool?
+      power_factor: bool?
+      grid_frequency_coarse: bool?
+      grid_frequency: bool?
+      phase_a_current: bool?
+      phase_b_current: bool?
+      phase_c_current: bool?
+    identity:
+      protocol_version: bool?
+      serial_number: bool?
+      device_type_code: bool?
+      nominal_output_power: bool?
+      output_type: bool?
+    load_control:
+      do_configuration: bool?
+      load_control_mode: bool?
+      load_timing_1_start_hour: bool?
+      load_timing_1_start_minute: bool?
+      load_timing_1_end_hour: bool?
+      load_timing_1_end_minute: bool?
+      load_timing_2_start_hour: bool?
+      load_timing_2_start_minute: bool?
+      load_timing_2_end_hour: bool?
+      load_timing_2_end_minute: bool?
+      load_on_off_mode: bool?
+      load_opt_start_hour: bool?
+      load_opt_start_minute: bool?
+      load_opt_end_hour: bool?
+      load_opt_end_minute: bool?
+      optimized_power_of_load: bool?
+      load_rated_power: bool?
+    meter:
+      meter_active_power: bool?
+      meter_phase_a_power: bool?
+      meter_phase_b_power: bool?
+      meter_phase_c_power: bool?
+      meter_comm_detection: bool?
+    meter_ch2:
+      meter_ch2_total_power: bool?
+      meter_ch2_phase_a_power: bool?
+      meter_ch2_phase_b_power: bool?
+      meter_ch2_phase_c_power: bool?
+    mppt:
+      mppt1_voltage: bool?
+      mppt1_current: bool?
+      mppt2_voltage: bool?
+      mppt2_current: bool?
+    mppt3_4:
+      mppt3_voltage: bool?
+      mppt3_current: bool?
+      mppt4_voltage: bool?
+      mppt4_current: bool?
+    power:
+      total_dc_power: bool?
+      load_power: bool?
+      export_power: bool?
+      total_active_power: bool?
+    status:
+      running_state: bool?
+      power_flow_status: bool?
+      drm_state: bool?
+    thermal:
+      inverter_temperature: bool?
+  # END GENERATED REGISTERS

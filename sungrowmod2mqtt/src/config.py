@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from src.catalog import Register
 
 UNOFFICIAL_NOTICE = (
     "Unofficial and not affiliated with Sungrow. "
@@ -29,6 +33,7 @@ class Settings:
     topic_prefix: str
     device_name: str
     log_level: str
+    register_toggles: dict[str, bool] = field(default_factory=dict)
 
 
 def _env(name: str, default: str = "") -> str:
@@ -54,6 +59,35 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if raw is None or raw == "":
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_register_toggles(raw: str) -> dict[str, bool]:
+    if not raw or not raw.strip():
+        return {}
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("REGISTER_TOGGLES must be a JSON object")
+    toggles: dict[str, bool] = {}
+    for key, value in data.items():
+        if not isinstance(key, str):
+            raise ValueError(f"REGISTER_TOGGLES key must be string, got {key!r}")
+        toggles[key] = bool(value)
+    return toggles
+
+
+def enabled_slugs(registers: Iterable[Register], toggles: dict[str, bool]) -> set[str]:
+    """Return slugs that should be polled/published.
+
+    Missing toggle keys fall back to each register's catalog ``enabled_by_default``.
+    """
+    enabled: set[str] = set()
+    for register in registers:
+        if register.slug in toggles:
+            if toggles[register.slug]:
+                enabled.add(register.slug)
+        elif register.enabled_by_default:
+            enabled.add(register.slug)
+    return enabled
 
 
 def load_settings() -> Settings:
@@ -92,6 +126,7 @@ def load_settings() -> Settings:
         topic_prefix=_env("MQTT_TOPIC_PREFIX") or "sungrowmod2mqtt",
         device_name=_env("DEVICE_NAME") or "Sungrow Inverter",
         log_level=log_level,
+        register_toggles=_parse_register_toggles(_env("REGISTER_TOGGLES", "")),
     )
 
 

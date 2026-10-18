@@ -33,15 +33,30 @@ Historical time-series blocks (addresses 6100–6826) are omitted from the catal
 | `allow_writes` | `false` | Master write gate |
 | `enable_ems_writes` | `false` | EMS / export / charge-discharge (requires `allow_writes`) |
 | `legacy_modqtt_compat` | `false` | If true, reuse old ModQTT `unique_id`s for selected sensors |
+| `registers` | core set on | Per-register toggles grouped by category (see below) |
 | `topic_prefix` | `sungrowmod2mqtt` | State topics under this prefix |
 | MQTT host/user/pass | empty | Falls back to Supervisor MQTT service |
 
 Enable the add-on **Watchdog** toggle in the Supervisor so a stuck poll loop or long MQTT outage triggers an automatic restart.
 
+## Choosing registers
+
+The **Registers** section lists every catalog register as an on/off toggle, grouped by category (`power`, `energy`, `mppt`, `battery`, `ems`, …).
+
+- Defaults match the previous core set (`enabled_by_default` in the catalog): about 16 sensors on, the rest off.
+- A register that is **off** is not read over Modbus and is not published as a Home Assistant entity (discovery uses a stub so HA removes it).
+- Turning a register **on** starts polling it and creates the entity.
+- Holding / EMS controls still require `allow_writes` / `enable_ems_writes` in addition to their toggle.
+- Identity registers (serial, device type, …) are always read at startup so the bridge can start; their toggles only control whether they appear as entities.
+
+Prefer a small enabled set. Sungrow WiNet is sensitive to Modbus load; polling the full catalog is harder on the session than ModQTT’s thinner reading list was.
+
+After changing register toggles, restart the add-on so discovery and polling pick up the new selection.
+
 ## Topics
 
 - `{prefix}/availability` — `online` / `offline` (LWT)
-- `{prefix}/state` — JSON snapshot of core (enabled-by-default) values
+- `{prefix}/state` — JSON snapshot of currently enabled register values
 - `{prefix}/{slug}/state` — per-register state
 - `{prefix}/{slug}/set` — write requests (when writes enabled)
 
@@ -65,7 +80,7 @@ Set `legacy_modqtt_compat: true` only if you need to keep the old `modqtt-addon_
 
 ### Discovery migration (0.2.0+)
 
-On first start after upgrading to device-based discovery, the add-on migrates existing per-entity discovery topics once (marker under `/data`). Entity `unique_id`s are unchanged, so history is kept. Toggle `allow_writes` / `enable_ems_writes` to add or remove gated controls; hidden components are cleaned up automatically.
+On first start after upgrading to device-based discovery, the add-on migrates existing per-entity discovery topics once (marker under `/data`). Entity `unique_id`s are unchanged, so history is kept. Toggle `allow_writes` / `enable_ems_writes` / per-register options to add or remove entities; hidden components are cleaned up automatically.
 
 ## Local development
 
@@ -76,4 +91,10 @@ pip install -r requirements-dev.txt
 cp .env.example .env   # edit MODBUS_HOST / MQTT_*
 python -m src.app --local-check
 pytest
+```
+
+When you add or rename registers in `src/catalog.json`, regenerate add-on options:
+
+```bash
+python3 scripts/gen_options.py
 ```

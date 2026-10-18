@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 LEGACY_MQTT_CLIENT_ID = "modqtt-addon"
 HOLDING_REFRESH_SECONDS = 300.0
 ADDON_NAME = "Sungrow Modbus to MQTT"
-ADDON_VERSION = "0.2.0"
+ADDON_VERSION = "0.3.0"
 ADDON_URL = "https://github.com/YpsilonTM/homeassistant-addons"
 DISCOVERY_MARKER_NAME = "sungrowmod2mqtt_device_discovery_v1"
 
@@ -39,6 +39,7 @@ class MqttBridge:
         allow_writes: bool = False,
         enable_ems_writes: bool = False,
         legacy_modqtt_compat: bool = False,
+        enabled_slugs: set[str] | None = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -51,6 +52,10 @@ class MqttBridge:
         self.allow_writes = allow_writes
         self.enable_ems_writes = enable_ems_writes
         self.legacy_modqtt_compat = legacy_modqtt_compat
+        if enabled_slugs is None:
+            self.enabled_slugs = {reg.slug for reg in registers if reg.enabled_by_default}
+        else:
+            self.enabled_slugs = set(enabled_slugs)
 
         self.availability_topic = f"{self.topic_prefix}/availability"
         self.state_topic = f"{self.topic_prefix}/state"
@@ -188,16 +193,21 @@ class MqttBridge:
             return f"{value:.{register.decimals}f}".rstrip("0").rstrip(".")
         return str(value)
 
+    def register_enabled(self, register: Register) -> bool:
+        return register.slug in self.enabled_slugs
+
     def publish_values(self, values: dict[str, Any]) -> None:
         for slug, value in values.items():
             register = self.by_slug.get(slug)
             if register is None or value is None:
                 continue
+            if not self.register_enabled(register):
+                continue
             self.publish(self.state_topic_for(register), self.format_state(value, register), retain=True)
 
         featured: dict[str, Any] = {}
         for register in self.registers:
-            if not register.enabled_by_default or register.slug not in values:
+            if not self.register_enabled(register) or register.slug not in values:
                 continue
             value = values[register.slug]
             if value is None:
@@ -206,7 +216,23 @@ class MqttBridge:
             featured[register.slug] = named if named is not None else value
         self.publish(self.state_topic, json.dumps(featured), retain=True)
 
+    def clear_disabled_retained_state(self) -> None:
+        """Clear retained MQTT state for registers that are turned off."""
+        for register in self.registers:
+            if self.register_enabled(register):
+                continue
+            try:
+                self.publish(self.state_topic_for(register), "", retain=True)
+            except Exception:
+                LOGGER.exception(
+                    "clear_disabled_state_failed slug=%s topic=%s",
+                    register.slug,
+                    self.state_topic_for(register),
+                )
+
     def write_allowed(self, register: Register) -> bool:
+        if not self.register_enabled(register):
+            return False
         if not register.writable:
             return False
         if not self.allow_writes:
@@ -218,6 +244,8 @@ class MqttBridge:
     def visible_registers(self) -> list[Register]:
         visible: list[Register] = []
         for register in self.registers:
+            if not self.register_enabled(register):
+                continue
             if register.writable and not self.write_allowed(register):
                 continue
             visible.append(register)
@@ -288,6 +316,8 @@ class MqttBridge:
     def _component_payload(self, register: Register) -> dict[str, Any]:
         """Build a device-discovery component dict (includes platform `p`)."""
         platform = self._platform_for(register)
+        if not self.register_enabled(register):
+            return {"p": platform}
         if register.writable and not self.write_allowed(register):
             return {"p": platform}
 
@@ -298,13 +328,11 @@ class MqttBridge:
             "name": register.name,
             "unique_id": unique_id,
             "default_entity_id": f"{platform}.{object_id}",
-            "enabled_by_default": register.enabled_by_default,
+            "enabled_by_default": True,
             "state_topic": self.state_topic_for(register),
         }
 
-        if not register.enabled_by_default:
-            payload["entity_category"] = "diagnostic" if not register.writable else "config"
-        elif register.writable:
+        if register.writable:
             payload["entity_category"] = "config"
 
         if register.unit:
@@ -409,6 +437,7 @@ class MqttBridge:
         self.device_discovery_topic = f"homeassistant/device/{self.device_id}/config"
         payload = self.build_device_discovery()
         self.publish(self.device_discovery_topic, json.dumps(payload), retain=True)
+        self.clear_disabled_retained_state()
 
         if migrating:
             self._clear_single_discovery()

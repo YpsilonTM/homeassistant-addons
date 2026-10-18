@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from pymodbus.client import ModbusTcpClient
+from pymodbus.exceptions import ConnectionException, ModbusIOException
 from pymodbus.pdu import ExceptionResponse
 
 from src.catalog import Register
@@ -16,8 +17,17 @@ LOGGER = logging.getLogger(__name__)
 
 MAX_BATCH_WORDS = 125
 MIN_WRITE_INTERVAL_SECONDS = 1.0
+# WiNet drops the TCP session under back-to-back Modbus requests with no pacing.
+INTER_BATCH_DELAY_SECONDS = 0.05
 ILLEGAL_DATA_ADDRESS = 2
 UNSUPPORTED_AFTER_FAILURES = 3
+
+_TRANSPORT_ERRORS = (
+    ConnectionException,
+    ModbusIOException,
+    OSError,
+    TimeoutError,
+)
 
 
 class ModbusReadError(RuntimeError):
@@ -42,11 +52,15 @@ class ModbusReader:
     timeout_seconds: float
     unsupported_slugs: set[str] = field(default_factory=set)
     _last_write_monotonic: float = field(default=0.0, init=False)
+    _last_request_monotonic: float = field(default=0.0, init=False)
     _failure_counts: dict[str, int] = field(default_factory=dict, init=False)
     _stop_event: threading.Event | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._client = ModbusTcpClient(
+        self._client = self._new_client()
+
+    def _new_client(self) -> ModbusTcpClient:
+        return ModbusTcpClient(
             host=self.host,
             port=self.port,
             timeout=self.timeout_seconds,
@@ -82,26 +96,57 @@ class ModbusReader:
             delay = min(delay * 2, max_delay_seconds)
 
     def close(self) -> None:
-        self._client.close()
+        try:
+            self._client.close()
+        except Exception:
+            LOGGER.debug("modbus_close_ignored", exc_info=True)
+
+    def _reset_connection(self, *, reason: str) -> None:
+        LOGGER.warning(
+            "modbus_resetting_connection host=%s port=%s reason=%s",
+            self.host,
+            self.port,
+            reason,
+        )
+        self.close()
+        self._client = self._new_client()
+        self.connect_with_backoff()
 
     def _ensure_connected(self) -> None:
         if not self._client.connected:
             self.connect_with_backoff()
 
-    def _read_registers(self, register_type: str, wire_address: int, count: int) -> list[int]:
+    def _pace_requests(self) -> None:
+        elapsed = time.monotonic() - self._last_request_monotonic
+        if self._last_request_monotonic > 0 and elapsed < INTER_BATCH_DELAY_SECONDS:
+            time.sleep(INTER_BATCH_DELAY_SECONDS - elapsed)
+
+    def _execute_read(self, register_type: str, wire_address: int, count: int):
+        self._pace_requests()
         self._ensure_connected()
-        if register_type == "input":
-            response = self._client.read_input_registers(
-                address=wire_address,
-                count=count,
-                device_id=self.unit_id,
-            )
-        else:
-            response = self._client.read_holding_registers(
-                address=wire_address,
-                count=count,
-                device_id=self.unit_id,
-            )
+        try:
+            if register_type == "input":
+                response = self._client.read_input_registers(
+                    address=wire_address,
+                    count=count,
+                    device_id=self.unit_id,
+                )
+            else:
+                response = self._client.read_holding_registers(
+                    address=wire_address,
+                    count=count,
+                    device_id=self.unit_id,
+                )
+        finally:
+            self._last_request_monotonic = time.monotonic()
+        return response
+
+    def _read_registers(self, register_type: str, wire_address: int, count: int) -> list[int]:
+        try:
+            response = self._execute_read(register_type, wire_address, count)
+        except _TRANSPORT_ERRORS as error:
+            self._reset_connection(reason=f"{type(error).__name__}: {error}")
+            response = self._execute_read(register_type, wire_address, count)
 
         if isinstance(response, ExceptionResponse) or response.isError():
             exception_code = getattr(response, "exception_code", None)
@@ -223,22 +268,33 @@ class ModbusReader:
     def write_register(self, register: Register, value: float | int | str) -> None:
         if register.register_type != "holding":
             raise ValueError(f"Cannot write non-holding register {register.slug}")
-        self._ensure_connected()
         words = encode_register(register, value)
         self._throttle_writes()
 
-        if len(words) == 1:
-            response = self._client.write_register(
-                address=register.wire_address,
-                value=words[0],
-                device_id=self.unit_id,
-            )
-        else:
-            response = self._client.write_registers(
-                address=register.wire_address,
-                values=words,
-                device_id=self.unit_id,
-            )
+        def _do_write():
+            self._pace_requests()
+            self._ensure_connected()
+            try:
+                if len(words) == 1:
+                    return self._client.write_register(
+                        address=register.wire_address,
+                        value=words[0],
+                        device_id=self.unit_id,
+                    )
+                return self._client.write_registers(
+                    address=register.wire_address,
+                    values=words,
+                    device_id=self.unit_id,
+                )
+            finally:
+                self._last_request_monotonic = time.monotonic()
+
+        try:
+            response = _do_write()
+        except _TRANSPORT_ERRORS as error:
+            self._reset_connection(reason=f"{type(error).__name__}: {error}")
+            response = _do_write()
+
         self._last_write_monotonic = time.monotonic()
 
         if response.isError():

@@ -10,7 +10,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.catalog import Register, filter_registers, load_catalog, model_name, registers_by_slug
-from src.config import UNOFFICIAL_NOTICE, Settings, load_dotenv_if_present, load_settings
+from src.config import (
+    UNOFFICIAL_NOTICE,
+    Settings,
+    enabled_slugs,
+    load_dotenv_if_present,
+    load_settings,
+)
 from src.decoder import decode_register
 from src.enums import decode_enum
 from src.modbus_client import ModbusReader
@@ -256,11 +262,14 @@ async def run_bridge(settings: Settings) -> int:
 
     active = filter_registers(all_registers, device_code=device_code)
     by_slug = registers_by_slug(active)
+    enabled = enabled_slugs(active, settings.register_toggles)
     LOGGER.info(
-        "identity serial=%s device_code=0x%X model=%s active_registers=%s",
+        "identity serial=%s device_code=0x%X model=%s active_registers=%s registers_enabled=%s of %s",
         serial,
         device_code or 0,
         model,
+        len(active),
+        len(enabled),
         len(active),
     )
 
@@ -277,6 +286,7 @@ async def run_bridge(settings: Settings) -> int:
         allow_writes=settings.allow_writes,
         enable_ems_writes=settings.enable_ems_writes,
         legacy_modqtt_compat=settings.legacy_modqtt_compat,
+        enabled_slugs=enabled,
     )
     mqtt.update_device_info(model, str(firmware) if firmware else None)
 
@@ -359,6 +369,7 @@ async def run_bridge(settings: Settings) -> int:
             )
             if not settings.allow_writes:
                 selected = [reg for reg in selected if reg.register_type == "input"]
+            selected = [reg for reg in selected if reg.slug in enabled]
 
             try:
                 words = await asyncio.to_thread(reader.read_many, selected)
